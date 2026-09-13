@@ -46,8 +46,8 @@ async function submitForm() {
     <div id="registration" class="form-panel">
       <p><strong>Selected event</strong></p><h2>{{ selectedEvent.title }}</h2><p class="muted">{{ selectedEvent.location }} · {{ selectedEvent.time }}</p>
       <form novalidate @input="submitted = false" @submit.prevent="submitForm">
-        <div class="field"><label for="name">Name</label><input id="name" ref="nameInput" v-model="form.name" type="text" autocomplete="name" :aria-invalid="attempted && !!errors.name" aria-describedby="name-error" /><p v-if="attempted && errors.name" id="name-error" class="error">{{ errors.name }}</p></div>
-        <div class="field"><label for="email">Email</label><input id="email" ref="emailInput" v-model="form.email" type="email" autocomplete="email" :aria-invalid="attempted && !!errors.email" aria-describedby="email-error" /><p v-if="attempted && errors.email" id="email-error" class="error">{{ errors.email }}</p></div>
+        <div class="field"><label for="name">Name</label><input id="name" ref="nameInput" v-model="form.name" type="text" autocomplete="name" maxlength="80" :aria-invalid="attempted && !!errors.name" aria-describedby="name-error" /><p v-if="attempted && errors.name" id="name-error" class="error">{{ errors.name }}</p></div>
+        <div class="field"><label for="email">Email</label><input id="email" ref="emailInput" v-model="form.email" type="email" autocomplete="email" maxlength="120" :aria-invalid="attempted && !!errors.email" aria-describedby="email-error" /><p v-if="attempted && errors.email" id="email-error" class="error">{{ errors.email }}</p></div>
         <div class="field"><label for="riders">Number of riders</label><input id="riders" ref="ridersInput" v-model.number="form.riders" type="number" min="1" max="6" step="1" :aria-invalid="attempted && !!errors.riders" aria-describedby="riders-error" /><p v-if="attempted && errors.riders" id="riders-error" class="error">{{ errors.riders }}</p></div>
         <button class="button primary full-width" type="submit">Register interest</button>
         <p class="data-note">This form is a demonstration. No registration or email is sent.</p>

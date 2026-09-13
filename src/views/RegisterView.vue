@@ -1,7 +1,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { registerUser } from '../services/auth'
+import { isSafeName, registerUser } from '../services/auth'
 
 const router = useRouter()
 const attempted = ref(false)
@@ -10,7 +10,9 @@ const submitting = ref(false)
 const form = reactive({ name: '', email: '', password: '', confirmPassword: '' })
 
 const errors = computed(() => ({
-  name: form.name.trim().length >= 2 ? '' : 'Name must contain at least 2 characters.',
+  name: form.name.trim().length >= 2 && isSafeName(form.name)
+    ? ''
+    : 'Enter at least 2 characters without angle brackets.',
   email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) ? '' : 'Enter a valid email address.',
   password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(form.password)
     ? ''

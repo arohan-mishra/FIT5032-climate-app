@@ -7,24 +7,60 @@ const DEMO_ADMIN_PASSWORD = 'Admin123!'
 const DEMO_USER_EMAIL = 'user@pedalmelbourne.test'
 const DEMO_USER_PASSWORD = 'User123!'
 
-function readStoredValue(key, fallback) {
+function readStoredValue(storage, key, fallback) {
   try {
-    const value = JSON.parse(localStorage.getItem(key))
+    const value = JSON.parse(storage.getItem(key))
     return value ?? fallback
   } catch {
     return fallback
   }
 }
 
-const currentUser = ref(readStoredValue(SESSION_KEY, null))
+function isValidUser(user) {
+  return user
+    && typeof user.id === 'string'
+    && typeof user.name === 'string'
+    && user.name.length <= 80
+    && typeof user.email === 'string'
+    && user.email.length <= 120
+    && ['user', 'admin'].includes(user.role)
+    && typeof user.salt === 'string'
+    && /^[0-9a-f]{32}$/.test(user.salt)
+    && typeof user.passwordHash === 'string'
+    && /^[0-9a-f]{64}$/.test(user.passwordHash)
+}
 
 function readUsers() {
-  const users = readStoredValue(USERS_KEY, [])
-  return Array.isArray(users) ? users : []
+  const users = readStoredValue(localStorage, USERS_KEY, [])
+  return Array.isArray(users) ? users.filter(isValidUser) : []
 }
+
+function createSessionUser(user) {
+  return { id: user.id, name: user.name, email: user.email, role: user.role }
+}
+
+function readSession() {
+  const session = readStoredValue(sessionStorage, SESSION_KEY, null)
+  if (!session || typeof session.id !== 'string') return null
+
+  const matchingUser = readUsers().find((user) => user.id === session.id)
+  if (!matchingUser) {
+    sessionStorage.removeItem(SESSION_KEY)
+    return null
+  }
+  return createSessionUser(matchingUser)
+}
+
+const currentUser = ref(readSession())
 
 function bytesToHex(bytes) {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+export function isSafeName(name) {
+  return !name.includes('<')
+    && !name.includes('>')
+    && !Array.from(name).some((character) => character.charCodeAt(0) < 32)
 }
 
 async function hashPassword(password, salt) {
@@ -35,7 +71,20 @@ async function hashPassword(password, salt) {
 
 export async function registerUser({ name, email, password }) {
   const users = readUsers()
+  const normalisedName = name.trim()
   const normalisedEmail = email.trim().toLowerCase()
+
+  if (
+    normalisedName.length < 2
+    || normalisedName.length > 80
+    || !isSafeName(normalisedName)
+    || normalisedEmail.length > 120
+    || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalisedEmail)
+    || password.length < 8
+    || password.length > 128
+  ) {
+    return { success: false, message: 'The account details are invalid.' }
+  }
 
   if (users.some((user) => user.email === normalisedEmail)) {
     return { success: false, message: 'An account with this email already exists.' }
@@ -44,7 +93,7 @@ export async function registerUser({ name, email, password }) {
   const salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16)))
   const user = {
     id: crypto.randomUUID(),
-    name: name.trim(),
+    name: normalisedName,
     email: normalisedEmail,
     role: 'user',
     salt,
@@ -65,7 +114,7 @@ export async function loginUser(email, password) {
     return { success: false, message: 'Email or password is incorrect.' }
   }
 
-  const sessionUser = { id: user.id, name: user.name, email: user.email, role: user.role }
+  const sessionUser = createSessionUser(user)
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser))
   currentUser.value = sessionUser
   return { success: true }

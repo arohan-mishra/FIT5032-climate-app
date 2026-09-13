@@ -13,9 +13,22 @@ const sampleRatings = [
 function readRatings() {
   try {
     const stored = JSON.parse(localStorage.getItem(RATINGS_KEY))
-    return Array.isArray(stored) ? stored : sampleRatings
+    if (!Array.isArray(stored)) return [...sampleRatings]
+
+    const validRatings = stored.filter((rating) =>
+      Number.isInteger(rating?.routeId)
+      && rating.routeId > 0
+      && typeof rating.userId === 'string'
+      && rating.userId.length <= 100
+      && Number.isInteger(rating.score)
+      && rating.score >= 1
+      && rating.score <= 5,
+    )
+    return Array.from(
+      new Map(validRatings.map((rating) => [`${rating.routeId}:${rating.userId}`, rating])).values(),
+    )
   } catch {
-    return sampleRatings
+    return [...sampleRatings]
   }
 }
 
@@ -27,7 +40,16 @@ if (!localStorage.getItem(RATINGS_KEY)) {
 
 function rateRoute(routeId, userId, score) {
   const numericScore = Number(score)
-  if (!userId || !Number.isInteger(numericScore) || numericScore < 1 || numericScore > 5) {
+  if (
+    !Number.isInteger(routeId)
+    || routeId <= 0
+    || typeof userId !== 'string'
+    || !userId
+    || userId.length > 100
+    || !Number.isInteger(numericScore)
+    || numericScore < 1
+    || numericScore > 5
+  ) {
     return false
   }
 
