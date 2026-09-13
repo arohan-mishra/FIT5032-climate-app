@@ -2,6 +2,7 @@
 defineProps({
   event: { type: Object, required: true },
   selected: { type: Boolean, default: false },
+  showAction: { type: Boolean, default: true },
 })
 
 defineEmits(['select'])
@@ -17,7 +18,7 @@ defineEmits(['select'])
       <span class="tag">{{ event.level }}</span>
       <h3>{{ event.title }}</h3>
       <p class="muted">{{ event.location }} · {{ event.time }}</p>
-      <button class="text-button" type="button" @click="$emit('select', event)">
+      <button v-if="showAction" class="text-button" type="button" @click="$emit('select', event)">
         {{ selected ? 'Selected' : 'Register interest' }}
       </button>
     </div>

@@ -35,7 +35,7 @@ import EventCard from '../components/EventCard.vue'
     <div class="container">
       <div class="section-heading"><div><h2>Upcoming events</h2></div></div>
       <div class="event-grid">
-        <EventCard v-for="event in events" :key="event.id" :event="event" />
+        <EventCard v-for="event in events" :key="event.id" :event="event" :show-action="false" />
       </div>
       <p class="data-note">Events shown are sample data for this demonstration application.</p>
     </div>
