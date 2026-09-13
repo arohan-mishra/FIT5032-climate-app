@@ -11,6 +11,7 @@ button, input, select { font: inherit; }
 .brand { display: flex; align-items: center; gap: .5rem; color: #222; text-decoration: none; }
 .brand-mark { color: #176b52; font-size: 1.4rem; }
 .main-nav { display: flex; gap: 1.25rem; }
+.main-nav { align-items: center; }
 .main-nav a { color: #222; text-decoration: none; }
 .main-nav a.router-link-active { text-decoration: underline; }
 .menu-button { display: none; padding: .4rem; border: 1px solid #999; background: white; }
@@ -45,6 +46,9 @@ button, input, select { font: inherit; }
 .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
 .event-list { display: grid; gap: .75rem; }
 .full-width { width: 100%; }
+.auth-form { max-width: 500px; margin: 0 auto; }
+.user-name { color: #666; }
+.button:disabled { cursor: wait; opacity: .65; }
 .error { margin: 0; color: #b00020; font-size: .85rem; }
 .success { padding: .75rem; background: #e3f3e8; }
 .site-footer { padding: 1.5rem 0; border-top: 1px solid #ccc; background: #f5f5f5; }
@@ -55,7 +59,7 @@ button, input, select { font: inherit; }
   .card-grid, .event-grid, .two-column, .filters { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 575px) {
+@media (max-width: 800px) {
   .menu-button { display: block; }
   .main-nav { display: none; position: absolute; top: 64px; left: 0; right: 0; flex-direction: column; padding: 1rem; border: 1px solid #ccc; background: white; }
   .main-nav.open { display: flex; }

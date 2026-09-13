@@ -1,8 +1,15 @@
 <script setup>
 import { ref } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
+import { useAuth } from './services/auth'
 
 const menuOpen = ref(false)
+const { currentUser, logoutUser } = useAuth()
+
+function logout() {
+  logoutUser()
+  menuOpen.value = false
+}
 </script>
 
 <template>
@@ -29,6 +36,14 @@ const menuOpen = ref(false)
         <RouterLink to="/" @click="menuOpen = false">Home</RouterLink>
         <RouterLink to="/routes" @click="menuOpen = false">Find a route</RouterLink>
         <RouterLink to="/events" @click="menuOpen = false">Events</RouterLink>
+        <template v-if="currentUser">
+          <span class="user-name">Hello, {{ currentUser.name }}</span>
+          <button class="text-button" type="button" @click="logout">Logout</button>
+        </template>
+        <template v-else>
+          <RouterLink to="/login" @click="menuOpen = false">Login</RouterLink>
+          <RouterLink to="/register" @click="menuOpen = false">Register</RouterLink>
+        </template>
       </nav>
     </div>
   </header>
