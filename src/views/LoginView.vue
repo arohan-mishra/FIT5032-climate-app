@@ -25,7 +25,12 @@ async function submitLogin() {
     return
   }
 
-  router.push({ name: 'home' })
+  const redirect = typeof route.query.redirect === 'string'
+    && route.query.redirect.startsWith('/')
+    && !route.query.redirect.startsWith('//')
+    ? route.query.redirect
+    : '/account'
+  router.push(redirect)
 }
 </script>
 
@@ -34,6 +39,10 @@ async function submitLogin() {
   <section class="section container">
     <form class="form-panel auth-form" novalidate @submit.prevent="submitLogin">
       <p v-if="route.query.registered === 'true'" class="success" role="status">Account created. You can now log in.</p>
+      <div class="data-note">
+        <p><strong>Demo user:</strong><br />user@pedalmelbourne.test<br />User123!</p>
+        <p><strong>Demo administrator:</strong><br />admin@pedalmelbourne.test<br />Admin123!</p>
+      </div>
       <div class="field"><label for="login-email">Email</label><input id="login-email" v-model="form.email" type="email" autocomplete="email" maxlength="120" /></div>
       <div class="field"><label for="login-password">Password</label><input id="login-password" v-model="form.password" type="password" autocomplete="current-password" maxlength="128" /></div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
