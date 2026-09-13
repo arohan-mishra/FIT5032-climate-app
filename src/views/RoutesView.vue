@@ -31,7 +31,7 @@ function resetFilters() {
     </form>
     <p class="result-count" aria-live="polite">Showing {{ filteredRoutes.length }} of {{ routes.length }} routes</p>
     <div v-if="filteredRoutes.length" class="card-grid">
-      <RouteCard v-for="route in filteredRoutes" :key="route.id" :route="route" />
+      <RouteCard v-for="route in filteredRoutes" :key="route.id" :route="route" allow-rating />
     </div>
     <div v-else class="empty-state"><h2>No routes match those filters</h2><p>Try a longer distance or a different difficulty.</p><button class="button primary" type="button" @click="resetFilters">Show all routes</button></div>
   </section>

@@ -2,8 +2,10 @@
 import { getAccountSummary } from '../services/auth'
 import { routes } from '../data/routes'
 import { events } from '../data/events'
+import { useRatings } from '../services/ratings'
 
 const accounts = getAccountSummary()
+const { ratings } = useRatings()
 </script>
 
 <template>
@@ -15,6 +17,7 @@ const accounts = getAccountSummary()
       <article class="card"><h3>{{ accounts.users }}</h3><p>User accounts</p></article>
       <article class="card"><h3>{{ routes.length }}</h3><p>Sample routes</p></article>
       <article class="card"><h3>{{ events.length }}</h3><p>Sample events</p></article>
+      <article class="card"><h3>{{ ratings.length }}</h3><p>Route ratings</p></article>
     </div>
   </section>
 </template>

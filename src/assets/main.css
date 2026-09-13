@@ -34,6 +34,11 @@ button, input, select { font: inherit; }
 .data-note { font-size: .85rem; }
 .facility-list { padding: 0; list-style: none; }
 .facility-list li { padding: .2rem .4rem; border: 1px solid #ddd; font-size: .8rem; }
+.rating-summary { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid #ddd; }
+.rating-form { margin-top: .75rem; }
+.rating-form label { display: block; font-weight: bold; }
+.rating-form select { min-height: 38px; margin: .35rem .35rem .35rem 0; padding: .3rem; }
+.rating-message { margin: .35rem 0 0; color: #176b52; font-size: .85rem; }
 .event-card { display: flex; gap: 1rem; }
 .date-tile { min-width: 48px; text-align: center; }
 .date-tile strong, .date-tile span { display: block; }
@@ -51,7 +56,7 @@ button, input, select { font: inherit; }
 .details-list { display: grid; grid-template-columns: 100px 1fr; gap: .5rem; }
 .details-list dt { font-weight: bold; }
 .details-list dd { margin: 0; }
-.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
 .summary-grid .card { text-align: center; }
 .summary-grid h3 { margin: 0; font-size: 2rem; }
 .error { margin: 0; color: #b00020; font-size: .85rem; }
