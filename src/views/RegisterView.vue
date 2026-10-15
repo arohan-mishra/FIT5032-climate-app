@@ -39,7 +39,7 @@ async function submitRegistration() {
 </script>
 
 <template>
-  <section class="page-banner"><div class="container"><h1>Register</h1><p>Create a demonstration Pedal Melbourne account.</p></div></section>
+  <section class="page-banner"><div class="container"><h1>Register</h1><p>Create your Pedal Melbourne account.</p></div></section>
   <section class="section container">
     <form class="form-panel auth-form" novalidate @submit.prevent="submitRegistration">
       <div class="field"><label for="register-name">Name</label><input id="register-name" v-model="form.name" type="text" autocomplete="name" maxlength="80" :aria-invalid="attempted && !!errors.name" /><p v-if="attempted && errors.name" class="error">{{ errors.name }}</p></div>
@@ -48,7 +48,7 @@ async function submitRegistration() {
       <div class="field"><label for="confirm-password">Confirm password</label><input id="confirm-password" v-model="form.confirmPassword" type="password" autocomplete="new-password" maxlength="128" :aria-invalid="attempted && !!errors.confirmPassword" /><p v-if="attempted && errors.confirmPassword" class="error">{{ errors.confirmPassword }}</p></div>
       <p v-if="serverError" class="error" role="alert">{{ serverError }}</p>
       <button class="button primary full-width" type="submit" :disabled="submitting">{{ submitting ? 'Creating account…' : 'Create account' }}</button>
-      <p class="data-note">This is a client-side demonstration account stored in this browser.</p>
+      <p class="data-note">Your account is managed securely using Firebase Authentication.</p>
     </form>
   </section>
 </template>

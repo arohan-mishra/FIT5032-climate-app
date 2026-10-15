@@ -40,3 +40,6 @@ npm run build
 ```
 
 The event registration is for demonstration only. It validates user input locally and does not send or store registrations.
+
+New accounts are created with Firebase Authentication. A matching profile document
+is stored in the Firestore `users` collection with the default `user` role.

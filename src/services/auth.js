@@ -1,4 +1,7 @@
+import { createUserWithEmailAndPassword, deleteUser, signOut } from 'firebase/auth'
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { readonly, ref } from 'vue'
+import { auth, db, isFirebaseConfigured } from '../firebase/init'
 
 const USERS_KEY = 'pedal-melbourne-users'
 const SESSION_KEY = 'pedal-melbourne-session'
@@ -70,7 +73,6 @@ async function hashPassword(password, salt) {
 }
 
 export async function registerUser({ name, email, password }) {
-  const users = readUsers()
   const normalisedName = name.trim()
   const normalisedEmail = email.trim().toLowerCase()
 
@@ -86,23 +88,41 @@ export async function registerUser({ name, email, password }) {
     return { success: false, message: 'The account details are invalid.' }
   }
 
-  if (users.some((user) => user.email === normalisedEmail)) {
-    return { success: false, message: 'An account with this email already exists.' }
+  if (!isFirebaseConfigured || !auth || !db) {
+    return { success: false, message: 'Account registration is currently unavailable.' }
   }
 
-  const salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16)))
-  const user = {
-    id: crypto.randomUUID(),
-    name: normalisedName,
-    email: normalisedEmail,
-    role: 'user',
-    salt,
-    passwordHash: await hashPassword(password, salt),
-  }
+  let credential
 
-  users.push(user)
-  localStorage.setItem(USERS_KEY, JSON.stringify(users))
-  return { success: true }
+  try {
+    credential = await createUserWithEmailAndPassword(auth, normalisedEmail, password)
+    await setDoc(doc(db, 'users', credential.user.uid), {
+      name: normalisedName,
+      email: normalisedEmail,
+      role: 'user',
+      createdAt: serverTimestamp(),
+    })
+    await signOut(auth)
+    return { success: true }
+  } catch (error) {
+    if (credential?.user) {
+      try {
+        await deleteUser(credential.user)
+      } catch (rollbackError) {
+        console.error('Unable to roll back Firebase account:', rollbackError)
+      }
+    }
+
+    if (error.code === 'auth/email-already-in-use') {
+      return { success: false, message: 'An account with this email already exists.' }
+    }
+    if (error.code === 'auth/weak-password') {
+      return { success: false, message: 'The password does not meet the security requirements.' }
+    }
+
+    console.error('Firebase registration failed:', error)
+    return { success: false, message: 'The account could not be created. Please try again.' }
+  }
 }
 
 export async function loginUser(email, password) {
