@@ -38,14 +38,15 @@ function saveRating() {
   <article class="card route-card">
     <div class="card-content">
       <div class="eyebrow-row">
-        <span class="tag">{{ route.difficulty }}</span>
-        <span>{{ route.distance }} km</span>
+        <span class="tag">{{ route.laneType || 'Cycling route' }}</span>
+        <span>{{ Math.round(route.length) }} m</span>
       </div>
-      <h3>{{ route.name }}</h3>
-      <p class="muted">{{ route.area }} · About {{ route.duration }} minutes</p>
-      <p>{{ route.description }}</p>
-      <ul class="facility-list" :aria-label="`Facilities on ${route.name}`">
-        <li v-for="facility in route.facilities" :key="facility">{{ facility }}</li>
+      <h3>{{ route.segmentDescription }}</h3>
+      <p class="muted">{{ route.region }}</p>
+      <p>{{ route.description || 'City of Melbourne cycling route.' }}</p>
+      <ul class="facility-list" :aria-label="`Details for ${route.segmentDescription}`">
+        <li v-if="route.protection">{{ route.protection }}</li>
+        <li v-if="route.surfaceTreatment">{{ route.surfaceTreatment }}</li>
       </ul>
       <div class="rating-summary" aria-live="polite">
         <strong>{{ averageRating ? `${averageRating} / 5` : 'No ratings yet' }}</strong>

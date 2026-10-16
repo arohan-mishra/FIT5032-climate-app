@@ -4,7 +4,7 @@ import { useFirestoreData } from '../services/firestoreData'
 import RouteCard from '../components/RouteCard.vue'
 import EventCard from '../components/EventCard.vue'
 
-const { routes, events, loading, error, loadFirestoreData } = useFirestoreData()
+const { cyclingSegments, events, loading, error, loadFirestoreData } = useFirestoreData()
 onMounted(loadFirestoreData)
 </script>
 
@@ -26,13 +26,13 @@ onMounted(loadFirestoreData)
 
   <section class="section container">
     <div class="section-heading">
-      <div><h2>Popular routes</h2></div>
+      <div><h2>Melbourne cycling routes</h2></div>
       <RouterLink class="text-link" to="/routes">View all routes →</RouterLink>
     </div>
     <p v-if="loading" role="status">Loading routes…</p>
     <p v-else-if="error" class="error" role="alert">{{ error }}</p>
     <div v-else class="card-grid">
-      <RouteCard v-for="route in routes.slice(0, 3)" :key="route.id" :route="route" />
+      <RouteCard v-for="segment in cyclingSegments.slice(0, 3)" :key="segment.id" :route="segment" />
     </div>
   </section>
 

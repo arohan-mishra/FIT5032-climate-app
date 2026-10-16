@@ -16,8 +16,8 @@ function readRatings() {
     if (!Array.isArray(stored)) return [...sampleRatings]
 
     const validRatings = stored.filter((rating) =>
-      Number.isInteger(rating?.routeId)
-      && rating.routeId > 0
+      ((Number.isInteger(rating?.routeId) && rating.routeId > 0)
+        || (typeof rating?.routeId === 'string' && rating.routeId.length > 0 && rating.routeId.length <= 100))
       && typeof rating.userId === 'string'
       && rating.userId.length <= 100
       && Number.isInteger(rating.score)
@@ -41,8 +41,8 @@ if (!localStorage.getItem(RATINGS_KEY)) {
 function rateRoute(routeId, userId, score) {
   const numericScore = Number(score)
   if (
-    !Number.isInteger(routeId)
-    || routeId <= 0
+    !((Number.isInteger(routeId) && routeId > 0)
+      || (typeof routeId === 'string' && routeId.length > 0 && routeId.length <= 100))
     || typeof userId !== 'string'
     || !userId
     || userId.length > 100

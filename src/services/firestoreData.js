@@ -4,6 +4,7 @@ import { db, isFirebaseConfigured } from '../firebase/init'
 
 const routes = ref([])
 const events = ref([])
+const cyclingSegments = ref([])
 const loading = ref(false)
 const error = ref('')
 let loaded = false
@@ -26,12 +27,14 @@ export async function loadFirestoreData() {
   error.value = ''
 
   try {
-    const [routeData, eventData] = await Promise.all([
+    const [routeData, eventData, segmentData] = await Promise.all([
       readCollection('routes', 'name'),
       readCollection('events', 'sortOrder'),
+      readCollection('cyclingSegments', 'region'),
     ])
     routes.value = routeData
     events.value = eventData
+    cyclingSegments.value = segmentData
     loaded = true
   } catch (loadError) {
     console.error('Unable to load Firestore data:', loadError)
@@ -45,6 +48,7 @@ export function useFirestoreData() {
   return {
     routes: readonly(routes),
     events: readonly(events),
+    cyclingSegments: readonly(cyclingSegments),
     loading: readonly(loading),
     error: readonly(error),
     loadFirestoreData,
