@@ -43,3 +43,4 @@ The event registration is for demonstration only. It validates user input locall
 
 New accounts are created with Firebase Authentication. A matching profile document
 is stored in the Firestore `users` collection with the default `user` role.
+Login, logout and session restoration are also handled by Firebase Authentication.

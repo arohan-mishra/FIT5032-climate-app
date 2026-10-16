@@ -2,11 +2,11 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import './assets/main.css'
-import { ensureDemoAccounts } from './services/auth'
+import { authReady } from './services/auth'
 
 const app = createApp(App)
 
-await ensureDemoAccounts()
+await authReady
 app.use(router)
 
 app.mount('#app')

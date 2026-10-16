@@ -7,8 +7,8 @@ const menuOpen = ref(false)
 const router = useRouter()
 const { currentUser, logoutUser } = useAuth()
 
-function logout() {
-  logoutUser()
+async function logout() {
+  await logoutUser()
   menuOpen.value = false
   router.push({ name: 'home' })
 }

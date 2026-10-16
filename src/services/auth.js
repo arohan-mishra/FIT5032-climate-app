@@ -1,14 +1,15 @@
-import { createUserWithEmailAndPassword, deleteUser, signOut } from 'firebase/auth'
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import {
+  createUserWithEmailAndPassword,
+  deleteUser,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth'
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { readonly, ref } from 'vue'
 import { auth, db, isFirebaseConfigured } from '../firebase/init'
 
 const USERS_KEY = 'pedal-melbourne-users'
-const SESSION_KEY = 'pedal-melbourne-session'
-const DEMO_ADMIN_EMAIL = 'admin@pedalmelbourne.test'
-const DEMO_ADMIN_PASSWORD = 'Admin123!'
-const DEMO_USER_EMAIL = 'user@pedalmelbourne.test'
-const DEMO_USER_PASSWORD = 'User123!'
 
 function readStoredValue(storage, key, fallback) {
   try {
@@ -38,38 +39,49 @@ function readUsers() {
   return Array.isArray(users) ? users.filter(isValidUser) : []
 }
 
-function createSessionUser(user) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role }
-}
+const currentUser = ref(null)
 
-function readSession() {
-  const session = readStoredValue(sessionStorage, SESSION_KEY, null)
-  if (!session || typeof session.id !== 'string') return null
+async function loadFirebaseUser(firebaseUser) {
+  const profileSnapshot = await getDoc(doc(db, 'users', firebaseUser.uid))
+  if (!profileSnapshot.exists()) throw new Error('The account profile is missing.')
 
-  const matchingUser = readUsers().find((user) => user.id === session.id)
-  if (!matchingUser) {
-    sessionStorage.removeItem(SESSION_KEY)
-    return null
+  const profile = profileSnapshot.data()
+  currentUser.value = {
+    id: firebaseUser.uid,
+    name: profile.name,
+    email: firebaseUser.email,
+    role: profile.role === 'admin' ? 'admin' : 'user',
   }
-  return createSessionUser(matchingUser)
 }
 
-const currentUser = ref(readSession())
+let authReadyResolved = false
+let resolveAuthReady
+export const authReady = new Promise((resolve) => { resolveAuthReady = resolve })
 
-function bytesToHex(bytes) {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+if (auth) {
+  onAuthStateChanged(auth, async (firebaseUser) => {
+    try {
+      if (firebaseUser) await loadFirebaseUser(firebaseUser)
+      else currentUser.value = null
+    } catch (error) {
+      console.error('Unable to restore the Firebase session:', error)
+      currentUser.value = null
+    } finally {
+      if (!authReadyResolved) {
+        authReadyResolved = true
+        resolveAuthReady()
+      }
+    }
+  })
+} else {
+  authReadyResolved = true
+  resolveAuthReady()
 }
 
 export function isSafeName(name) {
   return !name.includes('<')
     && !name.includes('>')
     && !Array.from(name).some((character) => character.charCodeAt(0) < 32)
-}
-
-async function hashPassword(password, salt) {
-  const data = new TextEncoder().encode(`${salt}:${password}`)
-  const hash = await crypto.subtle.digest('SHA-256', data)
-  return bytesToHex(new Uint8Array(hash))
 }
 
 export async function registerUser({ name, email, password }) {
@@ -126,45 +138,34 @@ export async function registerUser({ name, email, password }) {
 }
 
 export async function loginUser(email, password) {
-  const users = readUsers()
   const normalisedEmail = email.trim().toLowerCase()
-  const user = users.find((item) => item.email === normalisedEmail)
 
-  if (!user || (await hashPassword(password, user.salt)) !== user.passwordHash) {
-    return { success: false, message: 'Email or password is incorrect.' }
+  if (!isFirebaseConfigured || !auth || !db) {
+    return { success: false, message: 'Login is currently unavailable.' }
   }
 
-  const sessionUser = createSessionUser(user)
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser))
-  currentUser.value = sessionUser
-  return { success: true }
+  try {
+    const credential = await signInWithEmailAndPassword(auth, normalisedEmail, password)
+    await loadFirebaseUser(credential.user)
+    return { success: true }
+  } catch (error) {
+    if (auth.currentUser) await signOut(auth)
+
+    if (['auth/invalid-credential', 'auth/user-not-found', 'auth/wrong-password'].includes(error.code)) {
+      return { success: false, message: 'Email or password is incorrect.' }
+    }
+    if (error.code === 'auth/too-many-requests') {
+      return { success: false, message: 'Too many attempts. Please wait and try again.' }
+    }
+
+    console.error('Firebase login failed:', error)
+    return { success: false, message: 'Login failed. Please try again.' }
+  }
 }
 
-export function logoutUser() {
-  sessionStorage.removeItem(SESSION_KEY)
+export async function logoutUser() {
+  if (auth) await signOut(auth)
   currentUser.value = null
-}
-
-export async function ensureDemoAccounts() {
-  const users = readUsers()
-  const demos = [
-    { name: 'Demo Admin', email: DEMO_ADMIN_EMAIL, password: DEMO_ADMIN_PASSWORD, role: 'admin' },
-    { name: 'Demo User', email: DEMO_USER_EMAIL, password: DEMO_USER_PASSWORD, role: 'user' },
-  ]
-
-  for (const demo of demos) {
-    if (users.some((user) => user.email === demo.email)) continue
-    const salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16)))
-    users.push({
-      id: crypto.randomUUID(),
-      name: demo.name,
-      email: demo.email,
-      role: demo.role,
-      salt,
-      passwordHash: await hashPassword(demo.password, salt),
-    })
-  }
-  localStorage.setItem(USERS_KEY, JSON.stringify(users))
 }
 
 export function getAccountSummary() {

@@ -7,7 +7,7 @@ import RegisterView from '../views/RegisterView.vue'
 import AccountView from '../views/AccountView.vue'
 import AdminView from '../views/AdminView.vue'
 import AccessDeniedView from '../views/AccessDeniedView.vue'
-import { useAuth } from '../services/auth'
+import { authReady, useAuth } from '../services/auth'
 
 const { currentUser } = useAuth()
 
@@ -25,7 +25,9 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  await authReady
+
   if (to.meta.requiresAuth && !currentUser.value) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
