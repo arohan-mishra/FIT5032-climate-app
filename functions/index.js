@@ -1,14 +1,20 @@
 const { onRequest } = require('firebase-functions/v2/https')
 const logger = require('firebase-functions/logger')
 const { initializeApp } = require('firebase-admin/app')
+const { getAuth } = require('firebase-admin/auth')
 const { getFirestore, FieldValue } = require('firebase-admin/firestore')
+const { defineSecret } = require('firebase-functions/params')
 const axios = require('axios')
 
 initializeApp()
 
 const db = getFirestore()
+const adminAuth = getAuth()
+const openRouteServiceApiKey = defineSecret('OPENROUTESERVICE_API_KEY')
 const MELBOURNE_DATA_URL =
   'https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/bicycle-routes-including-informal-on-road-and-off-road-routes/records'
+const OPENROUTESERVICE_URL =
+  'https://api.openrouteservice.org/v2/directions/cycling-regular/geojson'
 const REGIONS_TO_IMPORT = [
   { name: 'Carlton', limit: 15 },
   { name: 'Docklands', limit: 15 },
@@ -80,6 +86,15 @@ function prepareSegment(record) {
   }
 }
 
+async function verifyUser(request) {
+  const authorization = request.headers.authorization || ''
+
+  if (!authorization.startsWith('Bearer ')) return null
+
+  const idToken = authorization.substring(7)
+  return adminAuth.verifyIdToken(idToken)
+}
+
 exports.apiStatus = onRequest({ cors: true }, (request, response) => {
   logger.info('API status checked')
 
@@ -149,3 +164,83 @@ exports.importCyclingSegments = onRequest({ cors: true }, async (request, respon
     })
   }
 })
+
+exports.getCyclingRoute = onRequest(
+  { cors: true, secrets: [openRouteServiceApiKey] },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ message: 'Use a POST request to generate a route.' })
+      return
+    }
+
+    try {
+      const user = await verifyUser(request)
+
+      if (!user) {
+        response.status(401).json({ message: 'Log in before generating a route.' })
+        return
+      }
+
+      const latitude = Number(request.body?.latitude)
+      const longitude = Number(request.body?.longitude)
+      const distance = Number(request.body?.distance)
+
+      if (
+        !Number.isFinite(latitude)
+        || latitude < -90
+        || latitude > 90
+        || !Number.isFinite(longitude)
+        || longitude < -180
+        || longitude > 180
+        || !Number.isInteger(distance)
+        || distance < 1000
+        || distance > 20000
+      ) {
+        response.status(400).json({
+          message: 'Provide valid coordinates and a distance from 1000 to 20000 metres.',
+        })
+        return
+      }
+
+      const routeResponse = await axios.post(
+        OPENROUTESERVICE_URL,
+        {
+          coordinates: [[longitude, latitude]],
+          options: {
+            round_trip: {
+              length: distance,
+              points: 5,
+              seed: 1,
+            },
+          },
+        },
+        {
+          headers: {
+            Authorization: openRouteServiceApiKey.value(),
+            'Content-Type': 'application/json',
+          },
+          timeout: 20000,
+        },
+      )
+
+      logger.info('Cycling route generated', {
+        userId: user.uid,
+        requestedDistance: distance,
+      })
+      response.status(200).json(routeResponse.data)
+    } catch (error) {
+      if (error.code?.startsWith('auth/')) {
+        response.status(401).json({ message: 'Your login session is invalid.' })
+        return
+      }
+
+      logger.error('Unable to generate cycling route', {
+        status: error.response?.status,
+        message: error.message,
+      })
+      response.status(502).json({
+        message: 'The cycling route could not be generated. Please try again.',
+      })
+    }
+  },
+)
