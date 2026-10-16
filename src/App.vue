@@ -1,8 +1,17 @@
 <script setup>
 import { ref } from 'vue'
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { useAuth } from './services/auth'
 
 const menuOpen = ref(false)
+const router = useRouter()
+const { currentUser, logoutUser } = useAuth()
+
+async function logout() {
+  await logoutUser()
+  menuOpen.value = false
+  router.push({ name: 'home' })
+}
 </script>
 
 <template>
@@ -29,6 +38,15 @@ const menuOpen = ref(false)
         <RouterLink to="/" @click="menuOpen = false">Home</RouterLink>
         <RouterLink to="/routes" @click="menuOpen = false">Find a route</RouterLink>
         <RouterLink to="/events" @click="menuOpen = false">Events</RouterLink>
+        <template v-if="currentUser">
+          <RouterLink to="/account" @click="menuOpen = false">My account</RouterLink>
+          <RouterLink v-if="currentUser.role === 'admin'" to="/admin" @click="menuOpen = false">Admin</RouterLink>
+          <button class="text-button" type="button" @click="logout">Logout</button>
+        </template>
+        <template v-else>
+          <RouterLink to="/login" @click="menuOpen = false">Login</RouterLink>
+          <RouterLink to="/register" @click="menuOpen = false">Register</RouterLink>
+        </template>
       </nav>
     </div>
   </header>
