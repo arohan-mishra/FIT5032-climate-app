@@ -113,7 +113,7 @@ function resetFilters() {
       <p v-if="generationError" class="error" role="alert">{{ generationError }}</p>
       <div v-if="generatedSummaries.length" class="generated-route">
         <h3 role="status">Three routes are ready</h3>
-        <div class="route-options" aria-label="Generated route options">
+        <div class="route-options" role="group" aria-label="Generated route options">
           <button
             v-for="(summary, index) in generatedSummaries"
             :key="index"

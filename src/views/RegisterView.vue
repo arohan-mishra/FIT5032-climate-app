@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { isSafeName, registerUser } from '../services/auth'
 
@@ -7,6 +7,10 @@ const router = useRouter()
 const attempted = ref(false)
 const serverError = ref('')
 const submitting = ref(false)
+const nameInput = ref(null)
+const emailInput = ref(null)
+const passwordInput = ref(null)
+const confirmPasswordInput = ref(null)
 const form = reactive({ name: '', email: '', password: '', confirmPassword: '' })
 
 const errors = computed(() => ({
@@ -23,7 +27,14 @@ const errors = computed(() => ({
 async function submitRegistration() {
   attempted.value = true
   serverError.value = ''
-  if (Object.values(errors.value).some(Boolean)) return
+  if (Object.values(errors.value).some(Boolean)) {
+    await nextTick()
+    if (errors.value.name) nameInput.value.focus()
+    else if (errors.value.email) emailInput.value.focus()
+    else if (errors.value.password) passwordInput.value.focus()
+    else confirmPasswordInput.value.focus()
+    return
+  }
 
   submitting.value = true
   const result = await registerUser(form)
@@ -42,10 +53,10 @@ async function submitRegistration() {
   <section class="page-banner"><div class="container"><h1>Register</h1><p>Create your Pedal Melbourne account.</p></div></section>
   <section class="section container">
     <form class="form-panel auth-form" novalidate @submit.prevent="submitRegistration">
-      <div class="field"><label for="register-name">Name</label><input id="register-name" v-model="form.name" type="text" autocomplete="name" maxlength="80" :aria-invalid="attempted && !!errors.name" /><p v-if="attempted && errors.name" class="error">{{ errors.name }}</p></div>
-      <div class="field"><label for="register-email">Email</label><input id="register-email" v-model="form.email" type="email" autocomplete="email" maxlength="120" :aria-invalid="attempted && !!errors.email" /><p v-if="attempted && errors.email" class="error">{{ errors.email }}</p></div>
-      <div class="field"><label for="register-password">Password</label><input id="register-password" v-model="form.password" type="password" autocomplete="new-password" maxlength="128" :aria-invalid="attempted && !!errors.password" /><p v-if="attempted && errors.password" class="error">{{ errors.password }}</p></div>
-      <div class="field"><label for="confirm-password">Confirm password</label><input id="confirm-password" v-model="form.confirmPassword" type="password" autocomplete="new-password" maxlength="128" :aria-invalid="attempted && !!errors.confirmPassword" /><p v-if="attempted && errors.confirmPassword" class="error">{{ errors.confirmPassword }}</p></div>
+      <div class="field"><label for="register-name">Name</label><input id="register-name" ref="nameInput" v-model="form.name" type="text" autocomplete="name" maxlength="80" required :aria-invalid="attempted && !!errors.name" aria-describedby="register-name-error" /><p v-if="attempted && errors.name" id="register-name-error" class="error">{{ errors.name }}</p></div>
+      <div class="field"><label for="register-email">Email</label><input id="register-email" ref="emailInput" v-model="form.email" type="email" autocomplete="email" maxlength="120" required :aria-invalid="attempted && !!errors.email" aria-describedby="register-email-error" /><p v-if="attempted && errors.email" id="register-email-error" class="error">{{ errors.email }}</p></div>
+      <div class="field"><label for="register-password">Password</label><input id="register-password" ref="passwordInput" v-model="form.password" type="password" autocomplete="new-password" maxlength="128" required :aria-invalid="attempted && !!errors.password" aria-describedby="register-password-error" /><p v-if="attempted && errors.password" id="register-password-error" class="error">{{ errors.password }}</p></div>
+      <div class="field"><label for="confirm-password">Confirm password</label><input id="confirm-password" ref="confirmPasswordInput" v-model="form.confirmPassword" type="password" autocomplete="new-password" maxlength="128" required :aria-invalid="attempted && !!errors.confirmPassword" aria-describedby="confirm-password-error" /><p v-if="attempted && errors.confirmPassword" id="confirm-password-error" class="error">{{ errors.confirmPassword }}</p></div>
       <p v-if="serverError" class="error" role="alert">{{ serverError }}</p>
       <button class="button primary full-width" type="submit" :disabled="submitting">{{ submitting ? 'Creating account…' : 'Create account' }}</button>
       <p class="data-note">Your account is managed securely using Firebase Authentication.</p>

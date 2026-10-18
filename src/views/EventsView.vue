@@ -26,7 +26,7 @@ const errors = computed(() => ({
 function selectEvent(event) {
   selectedEvent.value = event
   submitted.value = false
-  document.querySelector('#registration')?.scrollIntoView({ behavior: 'smooth' })
+  document.querySelector('#registration')?.scrollIntoView()
 }
 
 async function submitForm() {
