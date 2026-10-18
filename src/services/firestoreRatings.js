@@ -1,7 +1,13 @@
 import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore'
+import { readonly, ref } from 'vue'
 import { db, isFirebaseConfigured } from '../firebase/init'
 
 const RATINGS_COLLECTION = 'ratings'
+const ratings = ref([])
+const loading = ref(false)
+const error = ref('')
+let loaded = false
+let loadingPromise = null
 
 function normaliseSegmentId(segmentId) {
   return String(segmentId ?? '').trim()
@@ -61,4 +67,52 @@ export async function saveRating({ segmentId, userId, score }) {
   })
 
   return rating
+}
+
+export async function loadRatings() {
+  if (loaded) return ratings.value
+  if (loadingPromise) return loadingPromise
+
+  loading.value = true
+  error.value = ''
+
+  loadingPromise = fetchRatings()
+    .then((fetchedRatings) => {
+      ratings.value = fetchedRatings
+      loaded = true
+      return ratings.value
+    })
+    .catch((loadError) => {
+      console.error('Unable to load ratings:', loadError)
+      error.value = 'Ratings could not be loaded. Please try again later.'
+      return ratings.value
+    })
+    .finally(() => {
+      loading.value = false
+      loadingPromise = null
+    })
+
+  return loadingPromise
+}
+
+export async function rateSegment(segmentId, userId, score) {
+  const savedRating = await saveRating({ segmentId, userId, score })
+  const existingIndex = ratings.value.findIndex((rating) =>
+    rating.segmentId === savedRating.segmentId && rating.userId === savedRating.userId,
+  )
+
+  if (existingIndex === -1) ratings.value.push(savedRating)
+  else ratings.value[existingIndex] = savedRating
+
+  return savedRating
+}
+
+export function useFirestoreRatings() {
+  return {
+    ratings: readonly(ratings),
+    loading: readonly(loading),
+    error: readonly(error),
+    loadRatings,
+    rateSegment,
+  }
 }

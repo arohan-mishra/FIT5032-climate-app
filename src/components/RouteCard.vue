@@ -1,8 +1,8 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '../services/auth'
-import { useRatings } from '../services/ratings'
+import { useFirestoreRatings } from '../services/firestoreRatings'
 
 const props = defineProps({
   route: { type: Object, required: true },
@@ -11,11 +11,20 @@ const props = defineProps({
 
 const pageRoute = useRoute()
 const { currentUser } = useAuth()
-const { ratings, rateRoute } = useRatings()
+const {
+  ratings,
+  loading: ratingsLoading,
+  error: ratingsError,
+  loadRatings,
+  rateSegment,
+} = useFirestoreRatings()
 const selectedScore = ref('')
 const message = ref('')
+const isSaving = ref(false)
 
-const routeRatings = computed(() => ratings.value.filter((rating) => rating.routeId === props.route.id))
+const routeRatings = computed(() => ratings.value.filter(
+  (rating) => rating.segmentId === String(props.route.id),
+))
 const averageRating = computed(() => {
   if (!routeRatings.value.length) return null
   const total = routeRatings.value.reduce((sum, rating) => sum + rating.score, 0)
@@ -25,12 +34,37 @@ const userRating = computed(() =>
   routeRatings.value.find((rating) => rating.userId === currentUser.value?.id)?.score ?? '',
 )
 
-watch(userRating, (score) => { selectedScore.value = score }, { immediate: true })
+watch(
+  [userRating, () => props.route.id],
+  ([score]) => {
+    selectedScore.value = score
+    message.value = ''
+  },
+  { immediate: true },
+)
 
-function saveRating() {
-  message.value = rateRoute(props.route.id, currentUser.value.id, selectedScore.value)
-    ? 'Your rating has been saved.'
-    : 'Choose a rating from 1 to 5.'
+onMounted(loadRatings)
+
+async function saveUserRating() {
+  const numericScore = Number(selectedScore.value)
+
+  if (!Number.isInteger(numericScore) || numericScore < 1 || numericScore > 5) {
+    message.value = 'Choose a rating from 1 to 5.'
+    return
+  }
+
+  isSaving.value = true
+  message.value = ''
+
+  try {
+    await rateSegment(props.route.id, currentUser.value.id, numericScore)
+    message.value = 'Your rating has been saved.'
+  } catch (error) {
+    console.error('Unable to save rating:', error)
+    message.value = 'Your rating could not be saved. Please try again.'
+  } finally {
+    isSaving.value = false
+  }
 }
 </script>
 
@@ -49,17 +83,23 @@ function saveRating() {
         <li v-if="route.surfaceTreatment">{{ route.surfaceTreatment }}</li>
       </ul>
       <div class="rating-summary" aria-live="polite">
-        <strong>{{ averageRating ? `${averageRating} / 5` : 'No ratings yet' }}</strong>
-        <span v-if="routeRatings.length"> from {{ routeRatings.length }} {{ routeRatings.length === 1 ? 'rating' : 'ratings' }}</span>
+        <strong v-if="ratingsLoading">Loading ratings…</strong>
+        <strong v-else-if="ratingsError">Ratings unavailable</strong>
+        <template v-else>
+          <strong>{{ averageRating ? `${averageRating} / 5` : 'No ratings yet' }}</strong>
+          <span v-if="routeRatings.length"> from {{ routeRatings.length }} {{ routeRatings.length === 1 ? 'rating' : 'ratings' }}</span>
+        </template>
       </div>
       <div v-if="allowRating" class="rating-form">
         <template v-if="currentUser">
           <label :for="`rating-${route.id}`">Your rating</label>
-          <select :id="`rating-${route.id}`" v-model="selectedScore" @change="message = ''">
+          <select :id="`rating-${route.id}`" v-model="selectedScore" :disabled="isSaving" @change="message = ''">
             <option value="" disabled>Choose 1–5</option>
             <option v-for="score in 5" :key="score" :value="score">{{ score }}</option>
           </select>
-          <button class="button secondary" type="button" @click="saveRating">Save rating</button>
+          <button class="button secondary" type="button" :disabled="isSaving" @click="saveUserRating">
+            {{ isSaving ? 'Saving…' : 'Save rating' }}
+          </button>
           <p v-if="message" class="rating-message" role="status">{{ message }}</p>
         </template>
         <p v-else><RouterLink :to="{ name: 'login', query: { redirect: pageRoute.fullPath } }">Log in to rate this segment</RouterLink></p>
