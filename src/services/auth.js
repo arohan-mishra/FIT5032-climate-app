@@ -9,36 +9,6 @@ import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { readonly, ref } from 'vue'
 import { auth, db, isFirebaseConfigured } from '../firebase/init'
 
-const USERS_KEY = 'pedal-melbourne-users'
-
-function readStoredValue(storage, key, fallback) {
-  try {
-    const value = JSON.parse(storage.getItem(key))
-    return value ?? fallback
-  } catch {
-    return fallback
-  }
-}
-
-function isValidUser(user) {
-  return user
-    && typeof user.id === 'string'
-    && typeof user.name === 'string'
-    && user.name.length <= 80
-    && typeof user.email === 'string'
-    && user.email.length <= 120
-    && ['user', 'admin'].includes(user.role)
-    && typeof user.salt === 'string'
-    && /^[0-9a-f]{32}$/.test(user.salt)
-    && typeof user.passwordHash === 'string'
-    && /^[0-9a-f]{64}$/.test(user.passwordHash)
-}
-
-function readUsers() {
-  const users = readStoredValue(localStorage, USERS_KEY, [])
-  return Array.isArray(users) ? users.filter(isValidUser) : []
-}
-
 const currentUser = ref(null)
 
 async function loadFirebaseUser(firebaseUser) {
@@ -166,15 +136,6 @@ export async function loginUser(email, password) {
 export async function logoutUser() {
   if (auth) await signOut(auth)
   currentUser.value = null
-}
-
-export function getAccountSummary() {
-  const users = readUsers()
-  return {
-    total: users.length,
-    users: users.filter((user) => user.role === 'user').length,
-    admins: users.filter((user) => user.role === 'admin').length,
-  }
 }
 
 export function useAuth() {
