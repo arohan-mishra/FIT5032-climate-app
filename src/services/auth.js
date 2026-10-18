@@ -189,9 +189,25 @@ export async function loginWithGoogle() {
     if (error.code === 'auth/account-exists-with-different-credential') {
       return { success: false, message: 'An account already exists for this email. Log in with your email and password.' }
     }
+    if (['auth/operation-not-allowed', 'auth/configuration-not-found'].includes(error.code)) {
+      return { success: false, message: 'Google sign-in is not enabled in Firebase Authentication.' }
+    }
+    if (error.code === 'auth/unauthorized-domain') {
+      return { success: false, message: 'This website domain is not authorised for Google login in Firebase.' }
+    }
+    if (error.code === 'auth/network-request-failed') {
+      return { success: false, message: 'Google login could not reach Firebase. Check your connection and try again.' }
+    }
+    if (['auth/app-not-authorized', 'auth/invalid-api-key'].includes(error.code)) {
+      return { success: false, message: 'The Firebase configuration does not allow Google login from this app.' }
+    }
+    if (['permission-denied', 'firestore/permission-denied'].includes(error.code)) {
+      return { success: false, message: 'Google login succeeded, but the user profile could not be saved. Check the Firestore rules.' }
+    }
 
     console.error('Google login failed:', error)
-    return { success: false, message: 'Google login failed. Please try again.' }
+    const errorCode = typeof error.code === 'string' ? ` (${error.code})` : ''
+    return { success: false, message: `Google login failed${errorCode}. Please try again.` }
   }
 }
 
