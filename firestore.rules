@@ -17,6 +17,40 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /ratings/{ratingId} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && ratingId == request.resource.data.segmentId + '_' + request.auth.uid
+        && request.resource.data.keys().hasOnly(['segmentId', 'userId', 'score', 'updatedAt'])
+        && request.resource.data.segmentId is string
+        && request.resource.data.segmentId.size() >= 1
+        && request.resource.data.segmentId.size() <= 100
+        && !request.resource.data.segmentId.matches('.*\\/.*')
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.score is int
+        && request.resource.data.score >= 1
+        && request.resource.data.score <= 5
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if request.auth != null
+        && resource.data.segmentId == request.resource.data.segmentId
+        && resource.data.userId == request.auth.uid
+        && ratingId == request.resource.data.segmentId + '_' + request.auth.uid
+        && request.resource.data.keys().hasOnly(['segmentId', 'userId', 'score', 'updatedAt'])
+        && request.resource.data.segmentId is string
+        && request.resource.data.segmentId.size() >= 1
+        && request.resource.data.segmentId.size() <= 100
+        && !request.resource.data.segmentId.matches('.*\\/.*')
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.score is int
+        && request.resource.data.score >= 1
+        && request.resource.data.score <= 5
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
     match /users/{userId} {
       allow create: if request.auth != null
         && request.auth.uid == userId

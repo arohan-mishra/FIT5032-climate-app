@@ -1,7 +1,9 @@
 import {
   createUserWithEmailAndPassword,
   deleteUser,
+  GoogleAuthProvider,
   onAuthStateChanged,
+  signInWithPopup,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth'
@@ -9,37 +11,21 @@ import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { readonly, ref } from 'vue'
 import { auth, db, isFirebaseConfigured } from '../firebase/init'
 
-const USERS_KEY = 'pedal-melbourne-users'
-
-function readStoredValue(storage, key, fallback) {
-  try {
-    const value = JSON.parse(storage.getItem(key))
-    return value ?? fallback
-  } catch {
-    return fallback
-  }
-}
-
-function isValidUser(user) {
-  return user
-    && typeof user.id === 'string'
-    && typeof user.name === 'string'
-    && user.name.length <= 80
-    && typeof user.email === 'string'
-    && user.email.length <= 120
-    && ['user', 'admin'].includes(user.role)
-    && typeof user.salt === 'string'
-    && /^[0-9a-f]{32}$/.test(user.salt)
-    && typeof user.passwordHash === 'string'
-    && /^[0-9a-f]{64}$/.test(user.passwordHash)
-}
-
-function readUsers() {
-  const users = readStoredValue(localStorage, USERS_KEY, [])
-  return Array.isArray(users) ? users.filter(isValidUser) : []
-}
-
 const currentUser = ref(null)
+const googleProvider = new GoogleAuthProvider()
+
+function normaliseExternalName(firebaseUser) {
+  const fallbackName = firebaseUser.email?.split('@')[0] || 'Google user'
+  const safeName = Array.from(firebaseUser.displayName || fallbackName)
+    .filter((character) => {
+      const characterCode = character.charCodeAt(0)
+      return !['<', '>'].includes(character) && characterCode >= 32 && characterCode !== 127
+    })
+    .join('')
+    .trim()
+
+  return safeName.length >= 2 ? safeName.slice(0, 80) : 'Google user'
+}
 
 async function loadFirebaseUser(firebaseUser) {
   const profileSnapshot = await getDoc(doc(db, 'users', firebaseUser.uid))
@@ -163,20 +149,63 @@ export async function loginUser(email, password) {
   }
 }
 
+export async function loginWithGoogle() {
+  if (!isFirebaseConfigured || !auth || !db) {
+    return { success: false, message: 'Google login is currently unavailable.' }
+  }
+
+  try {
+    const credential = await signInWithPopup(auth, googleProvider)
+    const firebaseUser = credential.user
+
+    if (!firebaseUser.email) {
+      await signOut(auth)
+      return { success: false, message: 'The Google account did not provide an email address.' }
+    }
+
+    const profileReference = doc(db, 'users', firebaseUser.uid)
+    const profileSnapshot = await getDoc(profileReference)
+
+    if (!profileSnapshot.exists()) {
+      await setDoc(profileReference, {
+        name: normaliseExternalName(firebaseUser),
+        email: firebaseUser.email,
+        role: 'user',
+        createdAt: serverTimestamp(),
+      })
+    }
+
+    await loadFirebaseUser(firebaseUser)
+    return { success: true }
+  } catch (error) {
+    if (auth.currentUser) await signOut(auth)
+
+    if (error.code === 'auth/popup-closed-by-user') {
+      return { success: false, message: 'Google login was cancelled.' }
+    }
+    if (error.code === 'auth/popup-blocked') {
+      return { success: false, message: 'The Google login popup was blocked by your browser.' }
+    }
+    if (error.code === 'auth/account-exists-with-different-credential') {
+      return { success: false, message: 'An account already exists for this email. Log in with your email and password.' }
+    }
+
+    console.error('Google login failed:', error)
+    return { success: false, message: 'Google login failed. Please try again.' }
+  }
+}
+
 export async function logoutUser() {
   if (auth) await signOut(auth)
   currentUser.value = null
 }
 
-export function getAccountSummary() {
-  const users = readUsers()
-  return {
-    total: users.length,
-    users: users.filter((user) => user.role === 'user').length,
-    admins: users.filter((user) => user.role === 'admin').length,
-  }
-}
-
 export function useAuth() {
-  return { currentUser: readonly(currentUser), loginUser, logoutUser, registerUser }
+  return {
+    currentUser: readonly(currentUser),
+    loginUser,
+    loginWithGoogle,
+    logoutUser,
+    registerUser,
+  }
 }
