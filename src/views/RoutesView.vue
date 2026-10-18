@@ -4,6 +4,7 @@ import RouteCard from '../components/RouteCard.vue'
 import RouteMap from '../components/RouteMap.vue'
 import { useAuth } from '../services/auth'
 import { useFirestoreData } from '../services/firestoreData'
+import { downloadRouteAsGpx } from '../services/gpxExport'
 import { generateCyclingRoute } from '../services/routeGenerator'
 
 const { cyclingSegments, loading, error, loadFirestoreData } = useFirestoreData()
@@ -17,6 +18,7 @@ const generatedRoutes = ref([])
 const selectedRouteIndex = ref(0)
 const startLocation = ref(null)
 const generationError = ref('')
+const exportMessage = ref('')
 const isGenerating = ref(false)
 
 const regions = computed(() =>
@@ -51,6 +53,7 @@ const selectedRoute = computed(() => generatedRoutes.value[selectedRouteIndex.va
 
 async function createRoute() {
   generationError.value = ''
+  exportMessage.value = ''
   generatedRoutes.value = []
   selectedRouteIndex.value = 0
   isGenerating.value = true
@@ -63,6 +66,22 @@ async function createRoute() {
     generationError.value = error.message
   } finally {
     isGenerating.value = false
+  }
+}
+
+function selectRoute(index) {
+  selectedRouteIndex.value = index
+  exportMessage.value = ''
+}
+
+function exportSelectedRoute() {
+  exportMessage.value = ''
+
+  try {
+    downloadRouteAsGpx(selectedRoute.value, selectedRouteIndex.value + 1)
+    exportMessage.value = `Route ${selectedRouteIndex.value + 1} GPX download started.`
+  } catch (error) {
+    exportMessage.value = error.message
   }
 }
 
@@ -102,12 +121,18 @@ function resetFilters() {
             :class="{ primary: selectedRouteIndex === index }"
             type="button"
             :aria-pressed="selectedRouteIndex === index"
-            @click="selectedRouteIndex = index"
+            @click="selectRoute(index)"
           >
             Route {{ index + 1 }}: {{ summary.distance }} km, {{ summary.duration }} min
           </button>
         </div>
         <RouteMap v-if="startLocation && selectedRoute" :route="selectedRoute" :location="startLocation" />
+        <div class="export-action">
+          <button class="button secondary" type="button" @click="exportSelectedRoute">
+            Export Route {{ selectedRouteIndex + 1 }} as GPX
+          </button>
+          <p v-if="exportMessage" role="status">{{ exportMessage }}</p>
+        </div>
       </div>
     </div>
 
