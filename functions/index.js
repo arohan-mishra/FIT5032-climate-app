@@ -103,6 +103,81 @@ exports.apiStatus = onRequest({ cors: true }, (request, response) => {
   })
 })
 
+exports.getAdminDashboard = onRequest({ cors: true }, async (request, response) => {
+  if (request.method !== 'GET') {
+    response.status(405).json({ message: 'Use a GET request to load dashboard statistics.' })
+    return
+  }
+
+  try {
+    const user = await verifyUser(request)
+
+    if (!user) {
+      response.status(401).json({ message: 'Log in before loading the admin dashboard.' })
+      return
+    }
+
+    const profile = await db.collection('users').doc(user.uid).get()
+
+    if (!profile.exists || profile.data().role !== 'admin') {
+      response.status(403).json({ message: 'Administrator access is required.' })
+      return
+    }
+
+    const users = db.collection('users')
+    const [
+      totalUsersSnapshot,
+      regularUsersSnapshot,
+      administratorsSnapshot,
+      eventsSnapshot,
+      segmentsSnapshot,
+      ratingsSnapshot,
+    ] = await Promise.all([
+      users.count().get(),
+      users.where('role', '==', 'user').count().get(),
+      users.where('role', '==', 'admin').count().get(),
+      db.collection('events').count().get(),
+      db.collection('cyclingSegments').count().get(),
+      db.collection('ratings').select('score', 'segmentId').get(),
+    ])
+
+    const ratingScores = ratingsSnapshot.docs
+      .map((document) => Number(document.data().score))
+      .filter((score) => Number.isInteger(score) && score >= 1 && score <= 5)
+    const ratingTotal = ratingScores.reduce((total, score) => total + score, 0)
+    const ratedSegments = new Set(
+      ratingsSnapshot.docs.map((document) => document.data().segmentId).filter(Boolean),
+    )
+
+    response.status(200).json({
+      users: {
+        total: totalUsersSnapshot.data().count,
+        regular: regularUsersSnapshot.data().count,
+        administrators: administratorsSnapshot.data().count,
+      },
+      content: {
+        events: eventsSnapshot.data().count,
+        cyclingSegments: segmentsSnapshot.data().count,
+      },
+      ratings: {
+        total: ratingScores.length,
+        ratedSegments: ratedSegments.size,
+        average: ratingScores.length ? ratingTotal / ratingScores.length : null,
+      },
+    })
+  } catch (error) {
+    if (error.code?.startsWith('auth/')) {
+      response.status(401).json({ message: 'Your login session is invalid.' })
+      return
+    }
+
+    logger.error('Unable to load admin dashboard statistics', error)
+    response.status(500).json({
+      message: 'Dashboard statistics could not be loaded.',
+    })
+  }
+})
+
 exports.importCyclingSegments = onRequest({ cors: true }, async (request, response) => {
   if (request.method !== 'POST') {
     response.status(405).json({ message: 'Use a POST request to import segments.' })
