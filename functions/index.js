@@ -166,7 +166,7 @@ exports.importCyclingSegments = onRequest({ cors: true }, async (request, respon
 })
 
 exports.getCyclingRoute = onRequest(
-  { cors: true, secrets: [openRouteServiceApiKey], timeoutSeconds: 90 },
+  { cors: true, secrets: [openRouteServiceApiKey], timeoutSeconds: 120 },
   async (request, response) => {
     if (request.method !== 'POST') {
       response.status(405).json({ message: 'Use a POST request to generate a route.' })
@@ -202,8 +202,10 @@ exports.getCyclingRoute = onRequest(
         return
       }
 
-      const routeRequests = [1, 2, 3].map((seed) =>
-        axios.post(
+      const routes = []
+
+      for (const seed of [1, 2, 3]) {
+        const routeResponse = await axios.post(
           OPENROUTESERVICE_URL,
           {
             coordinates: [[longitude, latitude]],
@@ -220,20 +222,18 @@ exports.getCyclingRoute = onRequest(
               Authorization: openRouteServiceApiKey.value(),
               'Content-Type': 'application/json',
             },
-            timeout: 20000,
+            timeout: 30000,
           },
-        ),
-      )
-      const routeResponses = await Promise.all(routeRequests)
+        )
+        routes.push(routeResponse.data)
+      }
 
       logger.info('Cycling routes generated', {
         userId: user.uid,
         requestedDistance: distance,
-        routeCount: routeResponses.length,
+        routeCount: routes.length,
       })
-      response.status(200).json({
-        routes: routeResponses.map((routeResponse) => routeResponse.data),
-      })
+      response.status(200).json({ routes })
     } catch (error) {
       if (error.code?.startsWith('auth/')) {
         response.status(401).json({ message: 'Your login session is invalid.' })
@@ -242,7 +242,9 @@ exports.getCyclingRoute = onRequest(
 
       logger.error('Unable to generate cycling route', {
         status: error.response?.status,
+        code: error.code,
         message: error.message,
+        serviceMessage: error.response?.data?.error?.message,
       })
       response.status(502).json({
         message: 'The cycling route could not be generated. Please try again.',
