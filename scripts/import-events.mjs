@@ -5,6 +5,7 @@ import process from 'node:process'
 
 const eventsFile = new URL('../MOCK_EVENT_DATA.json', import.meta.url)
 const events = JSON.parse(await readFile(eventsFile, 'utf8'))
+const DEFAULT_EVENT_DURATION_MINUTES = 90
 const requiredTextFields = [
   'title',
   'category',
@@ -24,6 +25,10 @@ function timeInMinutes(time) {
   const [, hours, minutes, period] = match
   const hour = Number(hours) % 12 + (period === 'pm' ? 12 : 0)
   return hour * 60 + Number(minutes)
+}
+
+function eventDuration(event) {
+  return event.durationMinutes ?? DEFAULT_EVENT_DURATION_MINUTES
 }
 
 function validateEvents(records) {
@@ -49,6 +54,14 @@ function validateEvents(records) {
 
     if (timeInMinutes(event.time) === Number.MAX_SAFE_INTEGER) {
       throw new Error(`Event ${event.id} has an invalid time.`)
+    }
+
+    if (
+      !Number.isInteger(eventDuration(event))
+      || eventDuration(event) < 30
+      || eventDuration(event) > 240
+    ) {
+      throw new Error(`Event ${event.id} must have a duration from 30 to 240 minutes.`)
     }
   }
 }
@@ -84,6 +97,7 @@ const batch = db.batch()
 for (const [index, event] of sortedEvents.entries()) {
   batch.set(db.collection('events').doc(String(event.id)), {
     ...event,
+    durationMinutes: eventDuration(event),
     sortOrder: index + 1,
   })
 }

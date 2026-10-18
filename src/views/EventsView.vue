@@ -1,14 +1,31 @@
 <script setup>
+import dayGridPlugin from '@fullcalendar/vue3/daygrid'
+import interactionPlugin from '@fullcalendar/vue3/interaction'
+import classicThemePlugin from '@fullcalendar/vue3/themes/classic'
+import FullCalendar from '@fullcalendar/vue3'
+import '@fullcalendar/vue3/skeleton.css'
+import '@fullcalendar/vue3/themes/classic/theme.css'
+import '@fullcalendar/vue3/themes/classic/palette.css'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import {
+  createEventBooking,
+  deleteEventBooking,
+  loadEventBookings,
+} from '../services/eventBookings'
+import { useAuth } from '../services/auth'
 import { useFirestoreData } from '../services/firestoreData'
 
 const { events, loading, error, loadFirestoreData } = useFirestoreData()
+const { currentUser } = useAuth()
 const selectedEvent = ref(null)
 const submitted = ref(false)
 const attempted = ref(false)
-const form = reactive({ name: '', email: '', riders: 1 })
-const nameInput = ref(null)
-const emailInput = ref(null)
+const bookingError = ref('')
+const bookings = ref([])
+const calendarComponent = ref(null)
+const bookingsSection = ref(null)
+const selectedBookingId = ref('')
+const form = reactive({ riders: 1 })
 const ridersInput = ref(null)
 const searchText = ref('')
 const titleFilter = ref('')
@@ -21,10 +38,9 @@ const sortField = ref('eventDate')
 const sortDirection = ref('ascending')
 const currentPage = ref(1)
 
-onMounted(loadFirestoreData)
-watch(events, (availableEvents) => {
-  if (!selectedEvent.value && availableEvents.length) selectedEvent.value = availableEvents[0]
-}, { immediate: true })
+onMounted(() => {
+  loadFirestoreData()
+})
 
 const categories = computed(() =>
   [...new Set(events.value.map((event) => event.category).filter(Boolean))].sort(),
@@ -32,6 +48,38 @@ const categories = computed(() =>
 const levels = computed(() =>
   [...new Set(events.value.map((event) => event.level).filter(Boolean))].sort(),
 )
+const bookedEventIds = computed(() => new Set(bookings.value.map((booking) => booking.eventId)))
+const calendarEvents = computed(() => bookings.value.map((booking) => {
+  const sourceEvent = events.value.find((event) => String(event.id) === booking.eventId)
+
+  return {
+    id: booking.eventId,
+    title: booking.title,
+    start: booking.start,
+    end: booking.end,
+    classNames: ['calendar-event-booked'],
+    extendedProps: { location: sourceEvent?.location || '' },
+  }
+}))
+const calendarOptions = computed(() => ({
+  plugins: [classicThemePlugin, dayGridPlugin, interactionPlugin],
+  initialView: 'dayGridMonth',
+  initialDate: bookings.value[0]?.start || events.value[0]?.eventDate,
+  headerToolbar: {
+    left: 'prev,next today',
+    center: 'title',
+    right: '',
+  },
+  events: calendarEvents.value,
+  height: 'auto',
+  dayMaxEvents: true,
+  eventClick: handleCalendarEventClick,
+  dateClick: handleCalendarDateClick,
+  eventDidMount(info) {
+    const location = info.event.extendedProps.location
+    info.el.title = `${info.event.title}${location ? ` at ${location}` : ''}`
+  },
+}))
 const filteredEvents = computed(() => {
   const search = searchText.value.trim().toLowerCase()
   const title = titleFilter.value.trim().toLowerCase()
@@ -80,10 +128,15 @@ const lastDisplayedRow = computed(() => (
   Math.min(currentPage.value * 10, filteredEvents.value.length)
 ))
 const errors = computed(() => ({
-  name: form.name.trim() ? '' : 'Please enter your name.',
-  email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? '' : 'Enter a valid email address.',
   riders: Number.isInteger(form.riders) && form.riders >= 1 && form.riders <= 6 ? '' : 'Choose a whole number from 1 to 6.',
 }))
+
+watch(currentUser, (user) => {
+  bookings.value = loadEventBookings(user?.id)
+  selectedBookingId.value = ''
+  submitted.value = false
+  bookingError.value = ''
+}, { immediate: true })
 
 watch(
   [
@@ -137,24 +190,63 @@ function resetFilters() {
   currentPage.value = 1
 }
 
+function handleCalendarEventClick(info) {
+  selectedBookingId.value = info.event.id
+  bookingsSection.value?.scrollIntoView()
+}
+
+function handleCalendarDateClick(info) {
+  dateFilter.value = info.dateStr
+  currentPage.value = 1
+  document.querySelector('#event-table')?.scrollIntoView()
+}
+
+function isEventBooked(event) {
+  return bookedEventIds.value.has(String(event.id))
+}
+
 async function selectEvent(event) {
   selectedEvent.value = event
   submitted.value = false
   attempted.value = false
+  bookingError.value = ''
   await nextTick()
   document.querySelector('#registration')?.scrollIntoView()
 }
 
 async function submitForm() {
   attempted.value = true
-  submitted.value = !Object.values(errors.value).some(Boolean)
+  submitted.value = false
+  bookingError.value = ''
 
-  if (!submitted.value) {
-    await nextTick()
-    if (errors.value.name) nameInput.value.focus()
-    else if (errors.value.email) emailInput.value.focus()
-    else ridersInput.value.focus()
+  if (!currentUser.value) {
+    bookingError.value = 'Log in before registering for an event.'
+    return
   }
+
+  if (Object.values(errors.value).some(Boolean)) {
+    await nextTick()
+    ridersInput.value.focus()
+    return
+  }
+
+  const result = createEventBooking(selectedEvent.value, bookings.value, currentUser.value.id)
+  if (!result.success) {
+    bookingError.value = result.message
+    return
+  }
+
+  bookings.value = result.bookings
+  submitted.value = true
+  await nextTick()
+  calendarComponent.value?.getApi().gotoDate(result.booking.start)
+}
+
+function removeBooking(eventId) {
+  bookings.value = deleteEventBooking(eventId, bookings.value, currentUser.value?.id)
+  if (selectedBookingId.value === String(eventId)) selectedBookingId.value = ''
+  submitted.value = false
+  bookingError.value = ''
 }
 </script>
 
@@ -163,6 +255,31 @@ async function submitForm() {
     <div class="container"><h1>Events</h1><p>Browse sample community events and register your interest.</p></div>
   </section>
   <section class="section container">
+    <section class="calendar-panel" aria-labelledby="calendar-heading">
+      <div class="section-heading">
+        <div>
+          <h2 id="calendar-heading">My event calendar</h2>
+          <p>Your registered events appear here. Select a date to filter the available events.</p>
+        </div>
+      </div>
+      <p v-if="loading" role="status">Loading calendar…</p>
+      <p v-else-if="error" class="error" role="alert">{{ error }}</p>
+      <FullCalendar v-else ref="calendarComponent" :options="calendarOptions" />
+      <p v-if="!loading && !error && !bookings.length" class="calendar-empty" role="status">You have no saved event bookings yet.</p>
+      <p v-else-if="bookings.length" class="data-note"><span class="calendar-legend" aria-hidden="true"></span> Green events are registered and saved on this device.</p>
+    </section>
+
+    <section v-if="bookings.length" ref="bookingsSection" class="booking-list" aria-labelledby="bookings-heading">
+      <h2 id="bookings-heading">My saved bookings</h2>
+      <ul>
+        <li v-for="booking in bookings" :key="booking.eventId" :class="{ 'selected-booking': selectedBookingId === booking.eventId }">
+          <span>{{ booking.title }} · {{ new Date(booking.start).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' }) }}</span>
+          <button class="text-button" type="button" @click="removeBooking(booking.eventId)">Remove</button>
+        </li>
+      </ul>
+    </section>
+
+    <div id="event-table"></div>
     <h2>Upcoming events</h2>
     <form class="filters" @submit.prevent>
       <div class="field">
@@ -209,7 +326,7 @@ async function submitForm() {
             <td>{{ event.location }}</td>
             <td>{{ event.level }}</td>
             <td>{{ event.organiser || 'Not specified' }}</td>
-            <td><button class="text-button" type="button" @click="selectEvent(event)">{{ selectedEvent?.id === event.id ? 'Selected' : 'Register interest' }}</button></td>
+            <td><button class="text-button" type="button" :disabled="isEventBooked(event)" @click="selectEvent(event)">{{ isEventBooked(event) ? 'Booked' : selectedEvent?.id === event.id ? 'Selected' : 'Register' }}</button></td>
           </tr>
         </tbody>
       </table>
@@ -230,14 +347,21 @@ async function submitForm() {
       <p><strong>Selected event</strong></p>
       <h2 id="registration-heading">{{ selectedEvent.title }}</h2>
       <p class="muted">{{ formatEventDate(selectedEvent) }} · {{ selectedEvent.location }} · {{ selectedEvent.time }}</p>
-      <form novalidate @input="submitted = false" @submit.prevent="submitForm">
-        <div class="field"><label for="name">Name</label><input id="name" ref="nameInput" v-model="form.name" type="text" autocomplete="name" maxlength="80" :aria-invalid="attempted && !!errors.name" aria-describedby="name-error" /><p v-if="attempted && errors.name" id="name-error" class="error">{{ errors.name }}</p></div>
-        <div class="field"><label for="email">Email</label><input id="email" ref="emailInput" v-model="form.email" type="email" autocomplete="email" maxlength="120" :aria-invalid="attempted && !!errors.email" aria-describedby="email-error" /><p v-if="attempted && errors.email" id="email-error" class="error">{{ errors.email }}</p></div>
+      <form v-if="currentUser" novalidate @input="submitted = false" @submit.prevent="submitForm">
+        <dl class="registration-account">
+          <dt>Name</dt><dd>{{ currentUser.name }}</dd>
+          <dt>Email</dt><dd>{{ currentUser.email }}</dd>
+        </dl>
         <div class="field"><label for="riders">Number of riders</label><input id="riders" ref="ridersInput" v-model.number="form.riders" type="number" min="1" max="6" step="1" :aria-invalid="attempted && !!errors.riders" aria-describedby="riders-error" /><p v-if="attempted && errors.riders" id="riders-error" class="error">{{ errors.riders }}</p></div>
         <button class="button primary full-width" type="submit">Register interest</button>
-        <p class="data-note">This form is a demonstration. No registration or email is sent.</p>
-        <p v-if="submitted" class="success" role="status">Thanks, {{ form.name.trim() }}. Your demonstration registration for {{ selectedEvent.title }} is valid.</p>
+        <p class="data-note">Registration uses the name and email from your account.</p>
+        <p v-if="bookingError" class="error booking-message" role="alert">{{ bookingError }}</p>
+        <p v-if="submitted" class="success" role="status">Thanks, {{ currentUser.name }}. Your booking for {{ selectedEvent.title }} has been saved.</p>
       </form>
+      <div v-else class="login-required">
+        <p>You must log in before registering for this event.</p>
+        <RouterLink class="button primary" to="/login">Log in</RouterLink>
+      </div>
     </section>
   </section>
 </template>
