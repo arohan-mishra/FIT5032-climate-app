@@ -69,6 +69,10 @@ main:focus { outline: none; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
 .selected-segment { max-width: 600px; margin-top: 2rem; }
 .event-registration { max-width: 650px; margin: 2rem auto 0; }
+.registration-account { display: grid; grid-template-columns: 80px 1fr; gap: .5rem; padding: .75rem; background: #f5f5f5; }
+.registration-account dt { font-weight: bold; }
+.registration-account dd { margin: 0; }
+.login-required { padding: 1rem; border-left: 4px solid #176b52; background: #eef6f2; }
 .calendar-panel { margin-bottom: 2rem; padding: 1rem; border: 1px solid #ccc; border-radius: 4px; }
 .calendar-panel .section-heading p { margin-bottom: 0; }
 .calendar-panel .fc .fc-button { min-height: 44px; border-color: #176b52; background: #176b52; }

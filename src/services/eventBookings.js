@@ -1,5 +1,9 @@
-const STORAGE_KEY = 'pedal-melbourne-event-bookings'
+const STORAGE_KEY_PREFIX = 'pedal-melbourne-event-bookings'
 const DEFAULT_DURATION_MINUTES = 90
+
+function storageKey(userId) {
+  return `${STORAGE_KEY_PREFIX}:${userId}`
+}
 
 export function getEventDateRange(event) {
   const dateParts = String(event.eventDate || '').split('-').map(Number)
@@ -21,9 +25,11 @@ export function getEventDateRange(event) {
   return Number.isNaN(start.getTime()) ? null : { start, end }
 }
 
-export function loadEventBookings() {
+export function loadEventBookings(userId) {
+  if (!userId) return []
+
   try {
-    const savedBookings = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+    const savedBookings = JSON.parse(localStorage.getItem(storageKey(userId)) || '[]')
     if (!Array.isArray(savedBookings)) return []
 
     return savedBookings.filter((booking) => (
@@ -38,7 +44,9 @@ export function loadEventBookings() {
   }
 }
 
-export function createEventBooking(event, currentBookings) {
+export function createEventBooking(event, currentBookings, userId) {
+  if (!userId) return { success: false, message: 'Log in before registering for an event.' }
+
   const range = getEventDateRange(event)
   if (!range) return { success: false, message: 'This event has an invalid date or time.' }
 
@@ -67,7 +75,7 @@ export function createEventBooking(event, currentBookings) {
   const updatedBookings = [...currentBookings, booking]
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedBookings))
+    localStorage.setItem(storageKey(userId), JSON.stringify(updatedBookings))
     return { success: true, booking, bookings: updatedBookings }
   } catch (error) {
     console.error('Unable to save event booking:', error)
@@ -75,11 +83,13 @@ export function createEventBooking(event, currentBookings) {
   }
 }
 
-export function deleteEventBooking(eventId, currentBookings) {
+export function deleteEventBooking(eventId, currentBookings, userId) {
+  if (!userId) return currentBookings
+
   const updatedBookings = currentBookings.filter((booking) => booking.eventId !== String(eventId))
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedBookings))
+    localStorage.setItem(storageKey(userId), JSON.stringify(updatedBookings))
     return updatedBookings
   } catch (error) {
     console.error('Unable to remove event booking:', error)

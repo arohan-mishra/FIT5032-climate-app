@@ -12,20 +12,20 @@ import {
   deleteEventBooking,
   loadEventBookings,
 } from '../services/eventBookings'
+import { useAuth } from '../services/auth'
 import { useFirestoreData } from '../services/firestoreData'
 
 const { events, loading, error, loadFirestoreData } = useFirestoreData()
+const { currentUser } = useAuth()
 const selectedEvent = ref(null)
 const submitted = ref(false)
 const attempted = ref(false)
 const bookingError = ref('')
-const bookings = ref(loadEventBookings())
+const bookings = ref([])
 const calendarComponent = ref(null)
 const bookingsSection = ref(null)
 const selectedBookingId = ref('')
-const form = reactive({ name: '', email: '', riders: 1 })
-const nameInput = ref(null)
-const emailInput = ref(null)
+const form = reactive({ riders: 1 })
 const ridersInput = ref(null)
 const searchText = ref('')
 const titleFilter = ref('')
@@ -128,10 +128,15 @@ const lastDisplayedRow = computed(() => (
   Math.min(currentPage.value * 10, filteredEvents.value.length)
 ))
 const errors = computed(() => ({
-  name: form.name.trim() ? '' : 'Please enter your name.',
-  email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? '' : 'Enter a valid email address.',
   riders: Number.isInteger(form.riders) && form.riders >= 1 && form.riders <= 6 ? '' : 'Choose a whole number from 1 to 6.',
 }))
+
+watch(currentUser, (user) => {
+  bookings.value = loadEventBookings(user?.id)
+  selectedBookingId.value = ''
+  submitted.value = false
+  bookingError.value = ''
+}, { immediate: true })
 
 watch(
   [
@@ -214,15 +219,18 @@ async function submitForm() {
   submitted.value = false
   bookingError.value = ''
 
-  if (Object.values(errors.value).some(Boolean)) {
-    await nextTick()
-    if (errors.value.name) nameInput.value.focus()
-    else if (errors.value.email) emailInput.value.focus()
-    else ridersInput.value.focus()
+  if (!currentUser.value) {
+    bookingError.value = 'Log in before registering for an event.'
     return
   }
 
-  const result = createEventBooking(selectedEvent.value, bookings.value)
+  if (Object.values(errors.value).some(Boolean)) {
+    await nextTick()
+    ridersInput.value.focus()
+    return
+  }
+
+  const result = createEventBooking(selectedEvent.value, bookings.value, currentUser.value.id)
   if (!result.success) {
     bookingError.value = result.message
     return
@@ -235,7 +243,7 @@ async function submitForm() {
 }
 
 function removeBooking(eventId) {
-  bookings.value = deleteEventBooking(eventId, bookings.value)
+  bookings.value = deleteEventBooking(eventId, bookings.value, currentUser.value?.id)
   if (selectedBookingId.value === String(eventId)) selectedBookingId.value = ''
   submitted.value = false
   bookingError.value = ''
@@ -339,15 +347,21 @@ function removeBooking(eventId) {
       <p><strong>Selected event</strong></p>
       <h2 id="registration-heading">{{ selectedEvent.title }}</h2>
       <p class="muted">{{ formatEventDate(selectedEvent) }} · {{ selectedEvent.location }} · {{ selectedEvent.time }}</p>
-      <form novalidate @input="submitted = false" @submit.prevent="submitForm">
-        <div class="field"><label for="name">Name</label><input id="name" ref="nameInput" v-model="form.name" type="text" autocomplete="name" maxlength="80" :aria-invalid="attempted && !!errors.name" aria-describedby="name-error" /><p v-if="attempted && errors.name" id="name-error" class="error">{{ errors.name }}</p></div>
-        <div class="field"><label for="email">Email</label><input id="email" ref="emailInput" v-model="form.email" type="email" autocomplete="email" maxlength="120" :aria-invalid="attempted && !!errors.email" aria-describedby="email-error" /><p v-if="attempted && errors.email" id="email-error" class="error">{{ errors.email }}</p></div>
+      <form v-if="currentUser" novalidate @input="submitted = false" @submit.prevent="submitForm">
+        <dl class="registration-account">
+          <dt>Name</dt><dd>{{ currentUser.name }}</dd>
+          <dt>Email</dt><dd>{{ currentUser.email }}</dd>
+        </dl>
         <div class="field"><label for="riders">Number of riders</label><input id="riders" ref="ridersInput" v-model.number="form.riders" type="number" min="1" max="6" step="1" :aria-invalid="attempted && !!errors.riders" aria-describedby="riders-error" /><p v-if="attempted && errors.riders" id="riders-error" class="error">{{ errors.riders }}</p></div>
         <button class="button primary full-width" type="submit">Register interest</button>
-        <p class="data-note">Bookings are stored only in this browser. No registration email is sent.</p>
+        <p class="data-note">Registration uses the name and email from your account.</p>
         <p v-if="bookingError" class="error booking-message" role="alert">{{ bookingError }}</p>
-        <p v-if="submitted" class="success" role="status">Thanks, {{ form.name.trim() }}. Your booking for {{ selectedEvent.title }} has been saved.</p>
+        <p v-if="submitted" class="success" role="status">Thanks, {{ currentUser.name }}. Your booking for {{ selectedEvent.title }} has been saved.</p>
       </form>
+      <div v-else class="login-required">
+        <p>You must log in before registering for this event.</p>
+        <RouterLink class="button primary" to="/login">Log in</RouterLink>
+      </div>
     </section>
   </section>
 </template>
