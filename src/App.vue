@@ -1,9 +1,11 @@
 <script setup>
-import { ref } from 'vue'
-import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { nextTick, ref, watch } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuth } from './services/auth'
 
 const menuOpen = ref(false)
+const mainContent = ref(null)
+const pageRoute = useRoute()
 const router = useRouter()
 const { currentUser, logoutUser } = useAuth()
 
@@ -12,6 +14,11 @@ async function logout() {
   menuOpen.value = false
   router.push({ name: 'home' })
 }
+
+watch(() => pageRoute.fullPath, async () => {
+  await nextTick()
+  mainContent.value?.focus({ preventScroll: true })
+})
 </script>
 
 <template>
@@ -51,7 +58,7 @@ async function logout() {
     </div>
   </header>
 
-  <main id="main-content">
+  <main id="main-content" ref="mainContent" tabindex="-1">
     <RouterView />
   </main>
 

@@ -39,9 +39,9 @@ async function submitLogin() {
   <section class="section container">
     <form class="form-panel auth-form" novalidate @submit.prevent="submitLogin">
       <p v-if="route.query.registered === 'true'" class="success" role="status">Account created. You can now log in.</p>
-      <div class="field"><label for="login-email">Email</label><input id="login-email" v-model="form.email" type="email" autocomplete="email" maxlength="120" /></div>
-      <div class="field"><label for="login-password">Password</label><input id="login-password" v-model="form.password" type="password" autocomplete="current-password" maxlength="128" /></div>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <div class="field"><label for="login-email">Email</label><input id="login-email" v-model="form.email" type="email" autocomplete="email" maxlength="120" required :aria-invalid="!!error" aria-describedby="login-error" /></div>
+      <div class="field"><label for="login-password">Password</label><input id="login-password" v-model="form.password" type="password" autocomplete="current-password" maxlength="128" required :aria-invalid="!!error" aria-describedby="login-error" /></div>
+      <p v-if="error" id="login-error" class="error" role="alert">{{ error }}</p>
       <button class="button primary full-width" type="submit" :disabled="submitting">{{ submitting ? 'Logging in…' : 'Login' }}</button>
     </form>
   </section>
