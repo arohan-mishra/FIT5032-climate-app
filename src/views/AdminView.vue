@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import EventRegistrationsChart from '../components/EventRegistrationsChart.vue'
 import { fetchAdminDashboard } from '../services/adminDashboard'
 import { sendEventUpdate } from '../services/eventRegistrations'
 import { useFirestoreData } from '../services/firestoreData'
@@ -13,22 +14,12 @@ const emailAttempted = ref(false)
 const emailError = ref('')
 const emailSuccess = ref('')
 const emailForm = reactive({ eventId: '', subject: '', body: '' })
+const emailPanel = ref(null)
+const emailEventInput = ref(null)
 
 const averageRating = computed(() => {
   const average = dashboard.value?.ratings.average
   return average === null || average === undefined ? 'No ratings' : `${average.toFixed(1)} / 5`
-})
-const roleBreakdown = computed(() => {
-  if (!dashboard.value) return []
-
-  const total = dashboard.value.users.total
-  return [
-    { label: 'Users', count: dashboard.value.users.regular },
-    { label: 'Administrators', count: dashboard.value.users.administrators },
-  ].map((role) => ({
-    ...role,
-    percentage: total ? Math.round((role.count / total) * 100) : 0,
-  }))
 })
 const emailErrors = computed(() => ({
   eventId: emailForm.eventId ? '' : 'Choose an event.',
@@ -82,6 +73,16 @@ async function sendUpdate() {
   }
 }
 
+async function selectEmailEvent(eventId) {
+  emailForm.eventId = eventId
+  emailAttempted.value = false
+  emailError.value = ''
+  emailSuccess.value = ''
+  await nextTick()
+  emailPanel.value?.scrollIntoView({ block: 'start' })
+  emailEventInput.value?.focus({ preventScroll: true })
+}
+
 onMounted(() => {
   loadDashboard()
   loadFirestoreData()
@@ -109,17 +110,6 @@ onMounted(() => {
           <article class="dashboard-metric"><strong>{{ dashboard.users.regular }}</strong><span>User accounts</span></article>
           <article class="dashboard-metric"><strong>{{ dashboard.users.administrators }}</strong><span>Administrators</span></article>
         </div>
-        <div class="role-breakdown">
-          <h3>Account roles</h3>
-          <div v-for="role in roleBreakdown" :key="role.label" class="role-row">
-            <div><span>{{ role.label }}</span><strong>{{ role.count }} ({{ role.percentage }}%)</strong></div>
-            <progress
-              :value="role.count"
-              :max="Math.max(dashboard.users.total, 1)"
-              :aria-label="`${role.label}: ${role.count} accounts, ${role.percentage}%`"
-            >{{ role.percentage }}%</progress>
-          </div>
-        </div>
       </section>
 
       <section class="dashboard-panel" aria-labelledby="content-summary-heading">
@@ -139,13 +129,18 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="dashboard-panel" aria-labelledby="event-email-heading">
+      <section class="dashboard-panel" aria-labelledby="registration-chart-heading">
+        <h2 id="registration-chart-heading">Event registrations</h2>
+        <EventRegistrationsChart :events="dashboard.eventRegistrations" @select-event="selectEmailEvent" />
+      </section>
+
+      <section ref="emailPanel" class="dashboard-panel" aria-labelledby="event-email-heading">
         <h2 id="event-email-heading">Email registered event users</h2>
         <p>Send a customised update to every user registered for one event. The current calendar file will be attached.</p>
         <form class="bulk-email-form" novalidate @input="emailSuccess = ''" @submit.prevent="sendUpdate">
           <div class="field">
             <label for="email-event">Event</label>
-            <select id="email-event" v-model="emailForm.eventId" :aria-invalid="emailAttempted && !!emailErrors.eventId" aria-describedby="email-event-error">
+            <select id="email-event" ref="emailEventInput" v-model="emailForm.eventId" :aria-invalid="emailAttempted && !!emailErrors.eventId" aria-describedby="email-event-error">
               <option value="">Choose an event</option>
               <option v-for="event in events" :key="event.id" :value="String(event.id)">{{ event.title }} — {{ event.eventDate }}</option>
             </select>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import RouteCard from '../components/RouteCard.vue'
 import RouteMap from '../components/RouteMap.vue'
 import { useAuth } from '../services/auth'
@@ -20,6 +20,7 @@ const sortField = ref('segmentDescription')
 const sortDirection = ref('ascending')
 const currentPage = ref(1)
 const selectedSegment = ref(null)
+const selectedSegmentSection = ref(null)
 const routeDistance = ref(5)
 const generatedRoutes = ref([])
 const selectedRouteIndex = ref(0)
@@ -156,6 +157,13 @@ function resetFilters() {
   protectionFilter.value = ''
   currentPage.value = 1
 }
+
+async function selectSegment(segment) {
+  selectedSegment.value = segment
+  await nextTick()
+  selectedSegmentSection.value?.scrollIntoView({ block: 'start' })
+  selectedSegmentSection.value?.focus({ preventScroll: true })
+}
 </script>
 
 <template>
@@ -241,7 +249,7 @@ function resetFilters() {
             <td>{{ segment.laneType || 'Not specified' }}</td>
             <td>{{ segment.protection || 'Not specified' }}</td>
             <td>{{ Math.round(segment.length) }} m</td>
-            <td><button class="text-button" type="button" @click="selectedSegment = segment">View and rate</button></td>
+            <td><button class="text-button" type="button" @click="selectSegment(segment)">View and rate</button></td>
           </tr>
         </tbody>
       </table>
@@ -253,7 +261,7 @@ function resetFilters() {
     </nav>
     <div v-else-if="!loading && !error" class="empty-state"><h2>No segments match those filters</h2><p>Try another region or search term.</p><button class="button primary" type="button" @click="resetFilters">Show all segments</button></div>
 
-    <section v-if="selectedSegment" class="selected-segment" aria-labelledby="selected-segment-heading">
+    <section v-if="selectedSegment" ref="selectedSegmentSection" class="selected-segment" aria-labelledby="selected-segment-heading" tabindex="-1">
       <h2 id="selected-segment-heading">Selected segment</h2>
       <RouteCard :route="selectedSegment" allow-rating />
     </section>

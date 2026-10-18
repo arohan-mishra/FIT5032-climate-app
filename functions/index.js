@@ -240,13 +240,15 @@ exports.getAdminDashboard = onRequest({ cors: true }, async (request, response) 
       eventsSnapshot,
       segmentsSnapshot,
       ratingsSnapshot,
+      registrationsSnapshot,
     ] = await Promise.all([
       users.count().get(),
       users.where('role', '==', 'user').count().get(),
       users.where('role', '==', 'admin').count().get(),
-      db.collection('events').count().get(),
+      db.collection('events').select('title', 'eventDate').get(),
       db.collection('cyclingSegments').count().get(),
       db.collection('ratings').select('score', 'segmentId').get(),
+      db.collection('eventRegistrations').select('eventId', 'riders').get(),
     ])
 
     const ratingScores = ratingsSnapshot.docs
@@ -256,6 +258,38 @@ exports.getAdminDashboard = onRequest({ cors: true }, async (request, response) 
     const ratedSegments = new Set(
       ratingsSnapshot.docs.map((document) => document.data().segmentId).filter(Boolean),
     )
+    const eventRegistrationTotals = new Map()
+
+    registrationsSnapshot.docs.forEach((document) => {
+      const registration = document.data()
+      const eventId = String(registration.eventId || '')
+      if (!eventId) return
+
+      const current = eventRegistrationTotals.get(eventId) || { registrations: 0, riders: 0 }
+      current.registrations += 1
+      current.riders += Number.isInteger(registration.riders) && registration.riders > 0
+        ? registration.riders
+        : 1
+      eventRegistrationTotals.set(eventId, current)
+    })
+
+    const eventRegistrations = eventsSnapshot.docs
+      .map((document) => {
+        const event = document.data()
+        const totals = eventRegistrationTotals.get(document.id) || { registrations: 0, riders: 0 }
+        return {
+          eventId: document.id,
+          title: safeText(event.title, 160) || 'Untitled event',
+          eventDate: safeText(event.eventDate, 10),
+          ...totals,
+        }
+      })
+      .sort((first, second) => (
+        second.registrations - first.registrations
+        || second.riders - first.riders
+        || first.eventDate.localeCompare(second.eventDate)
+        || first.title.localeCompare(second.title)
+      ))
 
     response.status(200).json({
       users: {
@@ -264,7 +298,7 @@ exports.getAdminDashboard = onRequest({ cors: true }, async (request, response) 
         administrators: administratorsSnapshot.data().count,
       },
       content: {
-        events: eventsSnapshot.data().count,
+        events: eventsSnapshot.size,
         cyclingSegments: segmentsSnapshot.data().count,
       },
       ratings: {
@@ -272,6 +306,7 @@ exports.getAdminDashboard = onRequest({ cors: true }, async (request, response) 
         ratedSegments: ratedSegments.size,
         average: ratingScores.length ? ratingTotal / ratingScores.length : null,
       },
+      eventRegistrations,
     })
   } catch (error) {
     if (error.code?.startsWith('auth/')) {
