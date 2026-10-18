@@ -77,6 +77,8 @@ main:focus { outline: none; }
 .event-list { display: grid; gap: .75rem; }
 .full-width { width: 100%; }
 .auth-form { max-width: 500px; margin: 0 auto; }
+.auth-divider { display: flex; align-items: center; gap: .75rem; margin: 1rem 0; color: #666; font-size: .85rem; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-top: 1px solid #ccc; }
 .button:disabled { cursor: wait; opacity: .65; }
 .details-list { display: grid; grid-template-columns: 100px 1fr; gap: .5rem; }
 .details-list dt { font-weight: bold; }
