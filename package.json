@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "seed:firestore": "node scripts/seed-firestore.mjs",
+    "check:events": "node scripts/import-events.mjs --check",
+    "import:events": "node scripts/import-events.mjs",
     "lint": "run-s \"lint:*\"",
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache"

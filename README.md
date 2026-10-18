@@ -32,6 +32,21 @@ To seed another authorised Firebase project using Application Default Credential
 FIREBASE_PROJECT_ID=your-project-id npm run seed:firestore
 ```
 
+The Mockaroo event file can be checked locally without changing Firestore:
+
+```sh
+npm run check:events
+```
+
+To import the checked events into an authorised Firebase project:
+
+```sh
+FIREBASE_PROJECT_ID=your-project-id npm run import:events
+```
+
+The event import sorts the records by date and time before assigning their
+Firestore `sortOrder` values.
+
 ## Check the application
 
 ```sh
