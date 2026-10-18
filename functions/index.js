@@ -14,7 +14,7 @@ const openRouteServiceApiKey = defineSecret('OPENROUTESERVICE_API_KEY')
 const MELBOURNE_DATA_URL =
   'https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/bicycle-routes-including-informal-on-road-and-off-road-routes/records'
 const OPENROUTESERVICE_URL =
-  'https://api.openrouteservice.org/v2/directions/cycling-regular/geojson'
+  'https://api.heigit.org/openrouteservice/v2/directions/cycling-regular/geojson'
 const REGIONS_TO_IMPORT = [
   { name: 'Carlton', limit: 15 },
   { name: 'Docklands', limit: 15 },
@@ -220,6 +220,7 @@ exports.getCyclingRoute = onRequest(
           {
             headers: {
               Authorization: openRouteServiceApiKey.value(),
+              Accept: 'application/geo+json',
               'Content-Type': 'application/json',
             },
             timeout: 30000,
@@ -246,6 +247,28 @@ exports.getCyclingRoute = onRequest(
         message: error.message,
         serviceMessage: error.response?.data?.error?.message,
       })
+
+      if (error.code === 'ECONNABORTED') {
+        response.status(504).json({
+          message: 'OpenRouteService took too long to generate the routes. Please try again.',
+        })
+        return
+      }
+
+      if ([401, 403].includes(error.response?.status)) {
+        response.status(502).json({
+          message: 'OpenRouteService rejected the API key or its daily quota has been reached.',
+        })
+        return
+      }
+
+      if (error.response?.status === 429) {
+        response.status(429).json({
+          message: 'The OpenRouteService request limit has been reached. Please wait and try again.',
+        })
+        return
+      }
+
       response.status(502).json({
         message: 'The cycling route could not be generated. Please try again.',
       })

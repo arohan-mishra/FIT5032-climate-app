@@ -42,7 +42,15 @@ export async function generateCyclingRoute(distance) {
     },
     body: JSON.stringify({ ...location, distance }),
   })
-  const data = await response.json()
+  let data = {}
+
+  try {
+    data = await response.json()
+  } catch {
+    if (!response.ok) {
+      throw new Error(`The route service returned an error (${response.status}). Please try again.`)
+    }
+  }
 
   if (!response.ok) {
     throw new Error(data.message || 'The route could not be generated.')
