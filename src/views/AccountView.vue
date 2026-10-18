@@ -5,7 +5,6 @@ const { currentUser } = useAuth()
 </script>
 
 <template>
-  <section class="page-banner"><div class="container"><h1>My account</h1><p>View the account used for this demonstration session.</p></div></section>
   <section class="section container">
     <div class="form-panel auth-form">
       <h2>Account details</h2>

@@ -6,6 +6,16 @@ function isCount(value) {
 
 function validateDashboardData(data) {
   const average = data?.ratings?.average
+  const eventRegistrationsAreValid = Array.isArray(data?.eventRegistrations)
+    && data.eventRegistrations.every((event) => (
+      typeof event?.eventId === 'string'
+      && event.eventId.length > 0
+      && typeof event.title === 'string'
+      && event.title.length > 0
+      && typeof event.eventDate === 'string'
+      && isCount(event.registrations)
+      && isCount(event.riders)
+    ))
 
   if (
     !isCount(data?.users?.total)
@@ -16,6 +26,7 @@ function validateDashboardData(data) {
     || !isCount(data?.ratings?.total)
     || !isCount(data?.ratings?.ratedSegments)
     || !(average === null || (typeof average === 'number' && average >= 1 && average <= 5))
+    || !eventRegistrationsAreValid
   ) {
     throw new Error('The dashboard service returned invalid data.')
   }

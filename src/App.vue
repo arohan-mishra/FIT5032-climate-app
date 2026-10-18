@@ -65,7 +65,7 @@ watch(() => pageRoute.fullPath, async () => {
   <footer class="site-footer">
     <div class="container footer-content">
       <p><strong>Pedal Melbourne</strong><br />Helping more people feel confident on two wheels.</p>
-      <p>FIT5032 demonstration application</p>
+      <p>FIT5032 Assignment application</p>
     </div>
   </footer>
 </template>

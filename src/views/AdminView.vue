@@ -1,27 +1,35 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import EventRegistrationsChart from '../components/EventRegistrationsChart.vue'
 import { fetchAdminDashboard } from '../services/adminDashboard'
+import { sendEventUpdate } from '../services/eventRegistrations'
+import { useFirestoreData } from '../services/firestoreData'
 
+const { events, loadFirestoreData } = useFirestoreData()
 const dashboard = ref(null)
 const loading = ref(false)
 const error = ref('')
+const emailSending = ref(false)
+const emailAttempted = ref(false)
+const emailError = ref('')
+const emailSuccess = ref('')
+const emailForm = reactive({ eventId: '', subject: '', body: '' })
+const emailPanel = ref(null)
+const emailEventInput = ref(null)
 
 const averageRating = computed(() => {
   const average = dashboard.value?.ratings.average
   return average === null || average === undefined ? 'No ratings' : `${average.toFixed(1)} / 5`
 })
-const roleBreakdown = computed(() => {
-  if (!dashboard.value) return []
-
-  const total = dashboard.value.users.total
-  return [
-    { label: 'Users', count: dashboard.value.users.regular },
-    { label: 'Administrators', count: dashboard.value.users.administrators },
-  ].map((role) => ({
-    ...role,
-    percentage: total ? Math.round((role.count / total) * 100) : 0,
-  }))
-})
+const emailErrors = computed(() => ({
+  eventId: emailForm.eventId ? '' : 'Choose an event.',
+  subject: emailForm.subject.trim().length >= 3 && emailForm.subject.trim().length <= 120
+    ? ''
+    : 'Enter a subject from 3 to 120 characters.',
+  body: emailForm.body.trim().length >= 10 && emailForm.body.trim().length <= 5000
+    ? ''
+    : 'Enter a message from 10 to 5000 characters.',
+}))
 
 async function loadDashboard() {
   loading.value = true
@@ -37,7 +45,48 @@ async function loadDashboard() {
   }
 }
 
-onMounted(loadDashboard)
+async function sendUpdate() {
+  emailAttempted.value = true
+  emailError.value = ''
+  emailSuccess.value = ''
+  if (Object.values(emailErrors.value).some(Boolean)) return
+
+  const selectedEvent = events.value.find((event) => String(event.id) === emailForm.eventId)
+  if (!window.confirm(`Send this update to every registered user for ${selectedEvent?.title || 'this event'}?`)) return
+
+  emailSending.value = true
+  try {
+    const result = await sendEventUpdate({
+      eventId: emailForm.eventId,
+      subject: emailForm.subject.trim(),
+      body: emailForm.body.trim(),
+    })
+    emailSuccess.value = result.message
+    emailForm.subject = ''
+    emailForm.body = ''
+    emailAttempted.value = false
+  } catch (sendError) {
+    console.error('Unable to send event update:', sendError)
+    emailError.value = sendError.message
+  } finally {
+    emailSending.value = false
+  }
+}
+
+async function selectEmailEvent(eventId) {
+  emailForm.eventId = eventId
+  emailAttempted.value = false
+  emailError.value = ''
+  emailSuccess.value = ''
+  await nextTick()
+  emailPanel.value?.scrollIntoView({ block: 'start' })
+  emailEventInput.value?.focus({ preventScroll: true })
+}
+
+onMounted(() => {
+  loadDashboard()
+  loadFirestoreData()
+})
 </script>
 
 <template>
@@ -61,17 +110,6 @@ onMounted(loadDashboard)
           <article class="dashboard-metric"><strong>{{ dashboard.users.regular }}</strong><span>User accounts</span></article>
           <article class="dashboard-metric"><strong>{{ dashboard.users.administrators }}</strong><span>Administrators</span></article>
         </div>
-        <div class="role-breakdown">
-          <h3>Account roles</h3>
-          <div v-for="role in roleBreakdown" :key="role.label" class="role-row">
-            <div><span>{{ role.label }}</span><strong>{{ role.count }} ({{ role.percentage }}%)</strong></div>
-            <progress
-              :value="role.count"
-              :max="Math.max(dashboard.users.total, 1)"
-              :aria-label="`${role.label}: ${role.count} accounts, ${role.percentage}%`"
-            >{{ role.percentage }}%</progress>
-          </div>
-        </div>
       </section>
 
       <section class="dashboard-panel" aria-labelledby="content-summary-heading">
@@ -89,6 +127,40 @@ onMounted(loadDashboard)
           <article class="dashboard-metric"><strong>{{ dashboard.ratings.ratedSegments }}</strong><span>Rated segments</span></article>
           <article class="dashboard-metric"><strong>{{ averageRating }}</strong><span>Average score</span></article>
         </div>
+      </section>
+
+      <section class="dashboard-panel" aria-labelledby="registration-chart-heading">
+        <h2 id="registration-chart-heading">Event registrations</h2>
+        <EventRegistrationsChart :events="dashboard.eventRegistrations" @select-event="selectEmailEvent" />
+      </section>
+
+      <section ref="emailPanel" class="dashboard-panel" aria-labelledby="event-email-heading">
+        <h2 id="event-email-heading">Email registered event users</h2>
+        <p>Send a customised update to every user registered for one event. The current calendar file will be attached.</p>
+        <form class="bulk-email-form" novalidate @input="emailSuccess = ''" @submit.prevent="sendUpdate">
+          <div class="field">
+            <label for="email-event">Event</label>
+            <select id="email-event" ref="emailEventInput" v-model="emailForm.eventId" :aria-invalid="emailAttempted && !!emailErrors.eventId" aria-describedby="email-event-error">
+              <option value="">Choose an event</option>
+              <option v-for="event in events" :key="event.id" :value="String(event.id)">{{ event.title }} — {{ event.eventDate }}</option>
+            </select>
+            <p v-if="emailAttempted && emailErrors.eventId" id="email-event-error" class="error">{{ emailErrors.eventId }}</p>
+          </div>
+          <div class="field">
+            <label for="email-subject">Subject</label>
+            <input id="email-subject" v-model="emailForm.subject" type="text" maxlength="120" :aria-invalid="emailAttempted && !!emailErrors.subject" aria-describedby="email-subject-error" />
+            <p v-if="emailAttempted && emailErrors.subject" id="email-subject-error" class="error">{{ emailErrors.subject }}</p>
+          </div>
+          <div class="field">
+            <label for="email-body">Message</label>
+            <textarea id="email-body" v-model="emailForm.body" rows="7" maxlength="5000" :aria-invalid="emailAttempted && !!emailErrors.body" aria-describedby="email-body-help email-body-error"></textarea>
+            <p id="email-body-help" class="data-note">Plain text only. {{ emailForm.body.length }} / 5000 characters.</p>
+            <p v-if="emailAttempted && emailErrors.body" id="email-body-error" class="error">{{ emailErrors.body }}</p>
+          </div>
+          <button class="button primary" type="submit" :disabled="emailSending">{{ emailSending ? 'Sending update…' : 'Send event update' }}</button>
+          <p v-if="emailError" class="error booking-message" role="alert">{{ emailError }}</p>
+          <p v-if="emailSuccess" class="success" role="status">{{ emailSuccess }}</p>
+        </form>
       </section>
     </div>
   </section>

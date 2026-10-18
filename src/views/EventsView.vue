@@ -8,10 +8,10 @@ import '@fullcalendar/vue3/themes/classic/theme.css'
 import '@fullcalendar/vue3/themes/classic/palette.css'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
-  createEventBooking,
-  deleteEventBooking,
-  loadEventBookings,
-} from '../services/eventBookings'
+  cancelEventRegistration,
+  loadMyEventRegistrations,
+  registerForEvent,
+} from '../services/eventRegistrations'
 import { useAuth } from '../services/auth'
 import { useFirestoreData } from '../services/firestoreData'
 
@@ -22,6 +22,9 @@ const submitted = ref(false)
 const attempted = ref(false)
 const bookingError = ref('')
 const bookings = ref([])
+const bookingsLoading = ref(false)
+const bookingSubmitting = ref(false)
+const removingBookingId = ref('')
 const calendarComponent = ref(null)
 const bookingsSection = ref(null)
 const selectedBookingId = ref('')
@@ -131,11 +134,24 @@ const errors = computed(() => ({
   riders: Number.isInteger(form.riders) && form.riders >= 1 && form.riders <= 6 ? '' : 'Choose a whole number from 1 to 6.',
 }))
 
-watch(currentUser, (user) => {
-  bookings.value = loadEventBookings(user?.id)
+watch(currentUser, async (user) => {
+  bookings.value = []
   selectedBookingId.value = ''
   submitted.value = false
   bookingError.value = ''
+  if (!user) return
+
+  bookingsLoading.value = true
+  try {
+    bookings.value = await loadMyEventRegistrations()
+    await nextTick()
+    if (bookings.value.length) calendarComponent.value?.getApi().gotoDate(bookings.value[0].start)
+  } catch (loadError) {
+    console.error('Unable to load event registrations:', loadError)
+    bookingError.value = loadError.message
+  } finally {
+    bookingsLoading.value = false
+  }
 }, { immediate: true })
 
 watch(
@@ -230,23 +246,37 @@ async function submitForm() {
     return
   }
 
-  const result = createEventBooking(selectedEvent.value, bookings.value, currentUser.value.id)
-  if (!result.success) {
-    bookingError.value = result.message
-    return
+  bookingSubmitting.value = true
+  try {
+    const result = await registerForEvent(selectedEvent.value.id, form.riders)
+    bookings.value = [...bookings.value, result.booking]
+      .sort((first, second) => first.start.localeCompare(second.start))
+    submitted.value = true
+    await nextTick()
+    calendarComponent.value?.getApi().gotoDate(result.booking.start)
+  } catch (registrationError) {
+    console.error('Unable to register for event:', registrationError)
+    bookingError.value = registrationError.message
+  } finally {
+    bookingSubmitting.value = false
   }
-
-  bookings.value = result.bookings
-  submitted.value = true
-  await nextTick()
-  calendarComponent.value?.getApi().gotoDate(result.booking.start)
 }
 
-function removeBooking(eventId) {
-  bookings.value = deleteEventBooking(eventId, bookings.value, currentUser.value?.id)
-  if (selectedBookingId.value === String(eventId)) selectedBookingId.value = ''
-  submitted.value = false
+async function removeBooking(eventId) {
   bookingError.value = ''
+  removingBookingId.value = String(eventId)
+
+  try {
+    await cancelEventRegistration(eventId)
+    bookings.value = bookings.value.filter((booking) => booking.eventId !== String(eventId))
+    if (selectedBookingId.value === String(eventId)) selectedBookingId.value = ''
+    submitted.value = false
+  } catch (removalError) {
+    console.error('Unable to remove event registration:', removalError)
+    bookingError.value = removalError.message
+  } finally {
+    removingBookingId.value = ''
+  }
 }
 </script>
 
@@ -265,8 +295,11 @@ function removeBooking(eventId) {
       <p v-if="loading" role="status">Loading calendar…</p>
       <p v-else-if="error" class="error" role="alert">{{ error }}</p>
       <FullCalendar v-else ref="calendarComponent" :options="calendarOptions" />
-      <p v-if="!loading && !error && !bookings.length" class="calendar-empty" role="status">You have no saved event bookings yet.</p>
-      <p v-else-if="bookings.length" class="data-note"><span class="calendar-legend" aria-hidden="true"></span> Green events are registered and saved on this device.</p>
+      <p v-if="bookingsLoading" class="calendar-empty" role="status">Loading your registrations…</p>
+      <p v-else-if="!loading && !error && currentUser && !bookings.length" class="calendar-empty" role="status">You have no event registrations yet.</p>
+      <p v-else-if="!loading && !error && !currentUser" class="calendar-empty">Log in to view your event registrations.</p>
+      <p v-else-if="bookings.length" class="data-note"><span class="calendar-legend" aria-hidden="true"></span> Green events are registered and saved to your account.</p>
+      <p v-if="bookingError" class="error booking-message" role="alert">{{ bookingError }}</p>
     </section>
 
     <section v-if="bookings.length" ref="bookingsSection" class="booking-list" aria-labelledby="bookings-heading">
@@ -274,7 +307,7 @@ function removeBooking(eventId) {
       <ul>
         <li v-for="booking in bookings" :key="booking.eventId" :class="{ 'selected-booking': selectedBookingId === booking.eventId }">
           <span>{{ booking.title }} · {{ new Date(booking.start).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' }) }}</span>
-          <button class="text-button" type="button" @click="removeBooking(booking.eventId)">Remove</button>
+          <button class="text-button" type="button" :disabled="removingBookingId === booking.eventId" @click="removeBooking(booking.eventId)">{{ removingBookingId === booking.eventId ? 'Removing…' : 'Remove' }}</button>
         </li>
       </ul>
     </section>
@@ -353,10 +386,8 @@ function removeBooking(eventId) {
           <dt>Email</dt><dd>{{ currentUser.email }}</dd>
         </dl>
         <div class="field"><label for="riders">Number of riders</label><input id="riders" ref="ridersInput" v-model.number="form.riders" type="number" min="1" max="6" step="1" :aria-invalid="attempted && !!errors.riders" aria-describedby="riders-error" /><p v-if="attempted && errors.riders" id="riders-error" class="error">{{ errors.riders }}</p></div>
-        <button class="button primary full-width" type="submit">Register interest</button>
-        <p class="data-note">Registration uses the name and email from your account.</p>
-        <p v-if="bookingError" class="error booking-message" role="alert">{{ bookingError }}</p>
-        <p v-if="submitted" class="success" role="status">Thanks, {{ currentUser.name }}. Your booking for {{ selectedEvent.title }} has been saved.</p>
+        <button class="button primary full-width" type="submit" :disabled="bookingSubmitting">{{ bookingSubmitting ? 'Sending confirmation…' : 'Register and email confirmation' }}</button>
+        <p v-if="submitted" class="success" role="status">Thanks, {{ currentUser.name }}. Your registration was saved and the confirmation email was sent.</p>
       </form>
       <div v-else class="login-required">
         <p>You must log in before registering for this event.</p>
