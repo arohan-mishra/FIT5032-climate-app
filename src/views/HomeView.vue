@@ -14,10 +14,10 @@ onMounted(loadFirestoreData)
       <div>
         <h1>Pedal Melbourne</h1>
         <p class="hero-copy">
-          Find cycling routes and community events around Melbourne.
+          Find cycling segments, generated routes and community events around Melbourne.
         </p>
         <div class="button-row">
-          <RouterLink class="button primary" to="/routes">Explore routes</RouterLink>
+          <RouterLink class="button primary" to="/routes">Explore cycling</RouterLink>
           <RouterLink class="button secondary" to="/events">See events</RouterLink>
         </div>
       </div>
@@ -26,10 +26,10 @@ onMounted(loadFirestoreData)
 
   <section class="section container">
     <div class="section-heading">
-      <div><h2>Melbourne cycling routes</h2></div>
-      <RouterLink class="text-link" to="/routes">View all routes →</RouterLink>
+      <div><h2>Melbourne cycling segments</h2></div>
+      <RouterLink class="text-link" to="/routes">View all segments →</RouterLink>
     </div>
-    <p v-if="loading" role="status">Loading routes…</p>
+    <p v-if="loading" role="status">Loading segments…</p>
     <p v-else-if="error" class="error" role="alert">{{ error }}</p>
     <div v-else class="card-grid">
       <RouteCard v-for="segment in cyclingSegments.slice(0, 3)" :key="segment.id" :route="segment" />
@@ -42,7 +42,7 @@ onMounted(loadFirestoreData)
       <div v-if="!loading && !error" class="event-grid">
         <EventCard v-for="event in events" :key="event.id" :event="event" :show-action="false" />
       </div>
-      <p class="data-note">Route and event information is loaded from Cloud Firestore.</p>
+      <p class="data-note">Segment and event information is loaded from Cloud Firestore.</p>
     </div>
   </section>
 </template>

@@ -38,12 +38,12 @@ function saveRating() {
   <article class="card route-card">
     <div class="card-content">
       <div class="eyebrow-row">
-        <span class="tag">{{ route.laneType || 'Cycling route' }}</span>
+        <span class="tag">{{ route.laneType || 'Cycling segment' }}</span>
         <span>{{ Math.round(route.length) }} m</span>
       </div>
       <h3>{{ route.segmentDescription }}</h3>
       <p class="muted">{{ route.region }}</p>
-      <p>{{ route.description || 'City of Melbourne cycling route.' }}</p>
+      <p>{{ route.description || 'City of Melbourne cycling segment.' }}</p>
       <ul class="facility-list" :aria-label="`Details for ${route.segmentDescription}`">
         <li v-if="route.protection">{{ route.protection }}</li>
         <li v-if="route.surfaceTreatment">{{ route.surfaceTreatment }}</li>
@@ -62,7 +62,7 @@ function saveRating() {
           <button class="button secondary" type="button" @click="saveRating">Save rating</button>
           <p v-if="message" class="rating-message" role="status">{{ message }}</p>
         </template>
-        <p v-else><RouterLink :to="{ name: 'login', query: { redirect: pageRoute.fullPath } }">Log in to rate this route</RouterLink></p>
+        <p v-else><RouterLink :to="{ name: 'login', query: { redirect: pageRoute.fullPath } }">Log in to rate this segment</RouterLink></p>
       </div>
     </div>
   </article>
