@@ -48,5 +48,9 @@ export async function generateCyclingRoute(distance) {
     throw new Error(data.message || 'The route could not be generated.')
   }
 
-  return { route: data, location }
+  if (!Array.isArray(data.routes) || data.routes.length !== 3) {
+    throw new Error('Three routes could not be generated. Please try again.')
+  }
+
+  return { routes: data.routes, location }
 }

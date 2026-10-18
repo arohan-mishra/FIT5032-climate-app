@@ -166,7 +166,7 @@ exports.importCyclingSegments = onRequest({ cors: true }, async (request, respon
 })
 
 exports.getCyclingRoute = onRequest(
-  { cors: true, secrets: [openRouteServiceApiKey] },
+  { cors: true, secrets: [openRouteServiceApiKey], timeoutSeconds: 90 },
   async (request, response) => {
     if (request.method !== 'POST') {
       response.status(405).json({ message: 'Use a POST request to generate a route.' })
@@ -202,32 +202,38 @@ exports.getCyclingRoute = onRequest(
         return
       }
 
-      const routeResponse = await axios.post(
-        OPENROUTESERVICE_URL,
-        {
-          coordinates: [[longitude, latitude]],
-          options: {
-            round_trip: {
-              length: distance,
-              points: 5,
-              seed: 1,
+      const routeRequests = [1, 2, 3].map((seed) =>
+        axios.post(
+          OPENROUTESERVICE_URL,
+          {
+            coordinates: [[longitude, latitude]],
+            options: {
+              round_trip: {
+                length: distance,
+                points: 5,
+                seed,
+              },
             },
           },
-        },
-        {
-          headers: {
-            Authorization: openRouteServiceApiKey.value(),
-            'Content-Type': 'application/json',
+          {
+            headers: {
+              Authorization: openRouteServiceApiKey.value(),
+              'Content-Type': 'application/json',
+            },
+            timeout: 20000,
           },
-          timeout: 20000,
-        },
+        ),
       )
+      const routeResponses = await Promise.all(routeRequests)
 
-      logger.info('Cycling route generated', {
+      logger.info('Cycling routes generated', {
         userId: user.uid,
         requestedDistance: distance,
+        routeCount: routeResponses.length,
       })
-      response.status(200).json(routeResponse.data)
+      response.status(200).json({
+        routes: routeResponses.map((routeResponse) => routeResponse.data),
+      })
     } catch (error) {
       if (error.code?.startsWith('auth/')) {
         response.status(401).json({ message: 'Your login session is invalid.' })
