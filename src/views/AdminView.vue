@@ -1,43 +1,51 @@
 <script setup>
-import { computed, onMounted } from 'vue'
-import { getAccountSummary } from '../services/auth'
-import { routes } from '../data/routes'
-import { events } from '../data/events'
-import { useFirestoreRatings } from '../services/firestoreRatings'
+import { computed, onMounted, ref } from 'vue'
+import { fetchAdminDashboard } from '../services/adminDashboard'
 
-const accounts = getAccountSummary()
-const { ratings, loading, error, loadRatings } = useFirestoreRatings()
+const dashboard = ref(null)
+const loading = ref(false)
+const error = ref('')
 
-const ratedSegments = computed(() => new Set(
-  ratings.value.map((rating) => rating.segmentId),
-).size)
 const averageRating = computed(() => {
-  if (!ratings.value.length) return 'No ratings'
-
-  const total = ratings.value.reduce((sum, rating) => sum + rating.score, 0)
-  return `${(total / ratings.value.length).toFixed(1)} / 5`
+  const average = dashboard.value?.ratings.average
+  return average === null || average === undefined ? 'No ratings' : `${average.toFixed(1)} / 5`
 })
 
-onMounted(loadRatings)
+async function loadDashboard() {
+  loading.value = true
+  error.value = ''
+
+  try {
+    dashboard.value = await fetchAdminDashboard()
+  } catch (loadError) {
+    console.error('Unable to load admin dashboard:', loadError)
+    error.value = loadError.message
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadDashboard)
 </script>
 
 <template>
   <section class="page-banner"><div class="container"><h1>Admin dashboard</h1><p>This page is available only to administrators.</p></div></section>
   <section class="section container">
     <h2>Application summary</h2>
-    <div class="summary-grid">
-      <article class="card"><h3>{{ accounts.total }}</h3><p>Total accounts</p></article>
-      <article class="card"><h3>{{ accounts.users }}</h3><p>User accounts</p></article>
-      <article class="card"><h3>{{ routes.length }}</h3><p>Sample routes</p></article>
-      <article class="card"><h3>{{ events.length }}</h3><p>Sample events</p></article>
-      <article class="card"><h3>{{ loading ? '…' : ratings.length }}</h3><p>Segment ratings</p></article>
-      <article class="card"><h3>{{ loading ? '…' : ratedSegments }}</h3><p>Rated segments</p></article>
-      <article class="card"><h3>{{ loading ? '…' : averageRating }}</h3><p>Average rating</p></article>
-    </div>
-    <p v-if="loading" role="status">Loading rating statistics…</p>
+    <p v-if="loading" role="status">Loading dashboard statistics…</p>
     <div v-else-if="error" class="error" role="alert">
       <p>{{ error }}</p>
-      <button class="button secondary" type="button" @click="loadRatings">Try again</button>
+      <button class="button secondary" type="button" @click="loadDashboard">Try again</button>
+    </div>
+    <div v-else-if="dashboard" class="summary-grid">
+      <article class="card"><h3>{{ dashboard.users.total }}</h3><p>Total accounts</p></article>
+      <article class="card"><h3>{{ dashboard.users.regular }}</h3><p>User accounts</p></article>
+      <article class="card"><h3>{{ dashboard.users.administrators }}</h3><p>Administrators</p></article>
+      <article class="card"><h3>{{ dashboard.content.cyclingSegments }}</h3><p>Cycling segments</p></article>
+      <article class="card"><h3>{{ dashboard.content.events }}</h3><p>Events</p></article>
+      <article class="card"><h3>{{ dashboard.ratings.total }}</h3><p>Segment ratings</p></article>
+      <article class="card"><h3>{{ dashboard.ratings.ratedSegments }}</h3><p>Rated segments</p></article>
+      <article class="card"><h3>{{ averageRating }}</h3><p>Average rating</p></article>
     </div>
   </section>
 </template>
