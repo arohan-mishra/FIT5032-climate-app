@@ -7,13 +7,16 @@ import '@fullcalendar/vue3/skeleton.css'
 import '@fullcalendar/vue3/themes/classic/theme.css'
 import '@fullcalendar/vue3/themes/classic/palette.css'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import RouteMap from '../components/RouteMap.vue'
 import {
   cancelEventRegistration,
   loadMyEventRegistrations,
   registerForEvent,
 } from '../services/eventRegistrations'
+import { planRideToEvent } from '../services/eventDirections'
 import { useAuth } from '../services/auth'
 import { useFirestoreData } from '../services/firestoreData'
+import { downloadEventRideAsGpx } from '../services/gpxExport'
 
 const { events, loading, error, loadFirestoreData } = useFirestoreData()
 const { currentUser } = useAuth()
@@ -40,6 +43,14 @@ const organiserFilter = ref('')
 const sortField = ref('eventDate')
 const sortDirection = ref('ascending')
 const currentPage = ref(1)
+const rideEvent = ref(null)
+const rideRoute = ref(null)
+const rideStart = ref(null)
+const rideDestination = ref(null)
+const rideLoading = ref(false)
+const rideError = ref('')
+const rideExportMessage = ref('')
+const ridePlanner = ref(null)
 
 onMounted(() => {
   loadFirestoreData()
@@ -133,6 +144,15 @@ const lastDisplayedRow = computed(() => (
 const errors = computed(() => ({
   riders: Number.isInteger(form.riders) && form.riders >= 1 && form.riders <= 6 ? '' : 'Choose a whole number from 1 to 6.',
 }))
+const rideSummary = computed(() => {
+  const summary = rideRoute.value?.features?.[0]?.properties?.summary
+  if (!summary) return null
+
+  return {
+    distance: (summary.distance / 1000).toFixed(1),
+    duration: Math.max(1, Math.round(summary.duration / 60)),
+  }
+})
 
 watch(currentUser, async (user) => {
   bookings.value = []
@@ -228,6 +248,46 @@ async function selectEvent(event) {
   bookingError.value = ''
   await nextTick()
   document.querySelector('#registration')?.scrollIntoView()
+}
+
+async function planEventRide(event) {
+  rideEvent.value = event
+  rideRoute.value = null
+  rideStart.value = null
+  rideDestination.value = null
+  rideError.value = ''
+  rideExportMessage.value = ''
+  await nextTick()
+  ridePlanner.value?.scrollIntoView({ block: 'start' })
+  ridePlanner.value?.focus({ preventScroll: true })
+
+  if (!currentUser.value) {
+    rideError.value = 'Log in before planning a ride to an event.'
+    return
+  }
+
+  rideLoading.value = true
+  try {
+    const result = await planRideToEvent(event.id)
+    rideRoute.value = result.route
+    rideStart.value = result.start
+    rideDestination.value = result.destination
+  } catch (planningError) {
+    console.error('Unable to plan ride to event:', planningError)
+    rideError.value = planningError.message
+  } finally {
+    rideLoading.value = false
+  }
+}
+
+function exportEventRide() {
+  rideExportMessage.value = ''
+  try {
+    downloadEventRideAsGpx(rideRoute.value, rideEvent.value.title)
+    rideExportMessage.value = 'Ride GPX download started.'
+  } catch (exportError) {
+    rideExportMessage.value = exportError.message
+  }
 }
 
 async function submitForm() {
@@ -359,7 +419,12 @@ async function removeBooking(eventId) {
             <td>{{ event.location }}</td>
             <td>{{ event.level }}</td>
             <td>{{ event.organiser || 'Not specified' }}</td>
-            <td><button class="text-button" type="button" :disabled="isEventBooked(event)" @click="selectEvent(event)">{{ isEventBooked(event) ? 'Booked' : selectedEvent?.id === event.id ? 'Selected' : 'Register' }}</button></td>
+            <td>
+              <div class="table-actions">
+                <button class="text-button" type="button" :disabled="isEventBooked(event)" @click="selectEvent(event)">{{ isEventBooked(event) ? 'Booked' : selectedEvent?.id === event.id ? 'Selected' : 'Register' }}</button>
+                <button class="text-button" type="button" :disabled="rideLoading" @click="planEventRide(event)">{{ rideLoading && rideEvent?.id === event.id ? 'Planning…' : 'Plan ride' }}</button>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -375,6 +440,31 @@ async function removeBooking(eventId) {
       <p>Try another date, category or search term.</p>
       <button class="button primary" type="button" @click="resetFilters">Show all events</button>
     </div>
+
+    <section v-if="rideEvent" ref="ridePlanner" class="form-panel event-ride-planner" aria-labelledby="ride-planner-heading" tabindex="-1">
+      <p><strong>Ride planner</strong></p>
+      <h2 id="ride-planner-heading">Cycle to {{ rideEvent.title }}</h2>
+      <p class="muted">{{ rideEvent.location }} · {{ formatEventDate(rideEvent) }} at {{ rideEvent.time }}</p>
+      <p v-if="rideLoading" role="status">Using your location to calculate a cycling route…</p>
+      <p v-if="rideError" class="error" role="alert">{{ rideError }}</p>
+      <div v-if="rideRoute && rideSummary && rideStart && rideDestination">
+        <dl class="ride-summary" aria-label="Planned ride summary">
+          <div><dt>Distance</dt><dd>{{ rideSummary.distance }} km</dd></div>
+          <div><dt>Estimated cycling time</dt><dd>{{ rideSummary.duration }} minutes</dd></div>
+          <div><dt>Destination</dt><dd>{{ rideDestination.location }}</dd></div>
+        </dl>
+        <RouteMap
+          :route="rideRoute"
+          :location="rideStart"
+          :destination="rideDestination"
+          :destination-label="rideDestination.label"
+        />
+        <div class="export-action">
+          <button class="button secondary" type="button" @click="exportEventRide">Export ride as GPX</button>
+          <p v-if="rideExportMessage" role="status">{{ rideExportMessage }}</p>
+        </div>
+      </div>
+    </section>
 
     <section v-if="selectedEvent" id="registration" class="form-panel event-registration" aria-labelledby="registration-heading">
       <p><strong>Selected event</strong></p>

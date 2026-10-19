@@ -494,6 +494,122 @@ exports.getCyclingRoute = onRequest(
   },
 )
 
+exports.getEventDirections = onRequest(
+  { cors: true, secrets: [openRouteServiceApiKey], timeoutSeconds: 60 },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ message: 'Use a POST request to plan a ride to an event.' })
+      return
+    }
+
+    try {
+      const user = await verifyUser(request)
+      if (!user) {
+        response.status(401).json({ message: 'Log in before planning a ride to an event.' })
+        return
+      }
+
+      const eventId = safeText(request.body?.eventId, 100)
+      const startLatitude = Number(request.body?.latitude)
+      const startLongitude = Number(request.body?.longitude)
+
+      if (
+        !eventId
+        || eventId.includes('/')
+        || !Number.isFinite(startLatitude)
+        || startLatitude < -90
+        || startLatitude > 90
+        || !Number.isFinite(startLongitude)
+        || startLongitude < -180
+        || startLongitude > 180
+      ) {
+        response.status(400).json({ message: 'Provide a valid event and starting location.' })
+        return
+      }
+
+      const eventSnapshot = await db.collection('events').doc(eventId).get()
+      if (!eventSnapshot.exists) {
+        response.status(404).json({ message: 'The selected event could not be found.' })
+        return
+      }
+
+      const event = eventSnapshot.data()
+      const destinationLatitude = Number(event.latitude)
+      const destinationLongitude = Number(event.longitude)
+
+      if (
+        !Number.isFinite(destinationLatitude)
+        || destinationLatitude < -90
+        || destinationLatitude > 90
+        || !Number.isFinite(destinationLongitude)
+        || destinationLongitude < -180
+        || destinationLongitude > 180
+      ) {
+        response.status(422).json({ message: 'This event does not have a valid map location yet.' })
+        return
+      }
+
+      const routeResponse = await axios.post(
+        OPENROUTESERVICE_URL,
+        {
+          coordinates: [
+            [startLongitude, startLatitude],
+            [destinationLongitude, destinationLatitude],
+          ],
+          elevation: true,
+        },
+        {
+          headers: {
+            Authorization: openRouteServiceApiKey.value(),
+            Accept: 'application/geo+json',
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        },
+      )
+
+      logger.info('Ride to event planned', { eventId, userId: user.uid })
+      response.status(200).json({
+        route: routeResponse.data,
+        start: { latitude: startLatitude, longitude: startLongitude },
+        destination: {
+          latitude: destinationLatitude,
+          longitude: destinationLongitude,
+          label: safeText(event.title, 160) || 'Event destination',
+          location: safeText(event.location, 160),
+        },
+      })
+    } catch (error) {
+      if (isAuthenticationError(error)) {
+        response.status(401).json({ message: 'Your login session is invalid.' })
+        return
+      }
+
+      logger.error('Unable to plan ride to event', {
+        status: error.response?.status,
+        code: error.code,
+        message: error.message,
+        serviceMessage: error.response?.data?.error?.message,
+      })
+
+      if (error.code === 'ECONNABORTED') {
+        response.status(504).json({ message: 'The route service took too long. Please try again.' })
+        return
+      }
+      if ([401, 403].includes(error.response?.status)) {
+        response.status(502).json({ message: 'The route service rejected its API credentials.' })
+        return
+      }
+      if (error.response?.status === 429) {
+        response.status(429).json({ message: 'The route request limit has been reached. Please try again later.' })
+        return
+      }
+
+      response.status(502).json({ message: 'A cycling route to this event could not be generated.' })
+    }
+  },
+)
+
 exports.getMyEventRegistrations = onRequest({ cors: true }, async (request, response) => {
   if (request.method !== 'GET') {
     response.status(405).json({ message: 'Use a GET request to load event registrations.' })

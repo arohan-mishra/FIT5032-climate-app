@@ -6,18 +6,22 @@ import 'leaflet/dist/leaflet.css'
 const props = defineProps({
   route: { type: Object, required: true },
   location: { type: Object, required: true },
+  destination: { type: Object, default: null },
+  destinationLabel: { type: String, default: 'the event destination' },
 })
 
 const mapElement = ref(null)
 let map
 let routeLayer
 let locationMarker
+let destinationMarker
 
 function drawRoute() {
   if (!map) return
 
   if (routeLayer) routeLayer.remove()
   if (locationMarker) locationMarker.remove()
+  if (destinationMarker) destinationMarker.remove()
 
   routeLayer = L.geoJSON(props.route, {
     style: {
@@ -38,6 +42,19 @@ function drawRoute() {
     },
   ).bindPopup('Your starting location').addTo(map)
 
+  if (props.destination) {
+    destinationMarker = L.circleMarker(
+      [props.destination.latitude, props.destination.longitude],
+      {
+        color: '#ffffff',
+        fillColor: '#315b7d',
+        fillOpacity: 1,
+        radius: 8,
+        weight: 3,
+      },
+    ).bindPopup('Event destination').addTo(map)
+  }
+
   const bounds = routeLayer.getBounds()
   if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24] })
 }
@@ -56,7 +73,10 @@ onMounted(() => {
   drawRoute()
 })
 
-watch(() => props.route, drawRoute)
+watch(
+  () => [props.route, props.location, props.destination],
+  drawRoute,
+)
 
 onBeforeUnmount(() => {
   if (map) map.remove()
@@ -66,13 +86,13 @@ onBeforeUnmount(() => {
 <template>
   <div class="route-map-wrapper">
     <p id="route-map-description" class="data-note">
-      Interactive map showing the generated cycling route and its starting location.
+      Interactive map showing the generated cycling route from your starting location<span v-if="destination"> to {{ destinationLabel }}</span>.
     </p>
     <div
       ref="mapElement"
       class="route-map"
       role="region"
-      aria-label="Generated cycling route map"
+      :aria-label="destination ? `Cycling route map to ${destinationLabel}` : 'Generated cycling route map'"
       aria-describedby="route-map-description"
     ></div>
   </div>

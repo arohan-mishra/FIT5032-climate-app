@@ -1,6 +1,6 @@
 import { auth } from '../firebase/init'
 
-function getCurrentLocation() {
+export function getCurrentLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Location is not supported by this browser.'))

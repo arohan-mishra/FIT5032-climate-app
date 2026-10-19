@@ -6,6 +6,22 @@ import process from 'node:process'
 const eventsFile = new URL('../MOCK_EVENT_DATA.json', import.meta.url)
 const events = JSON.parse(await readFile(eventsFile, 'utf8'))
 const DEFAULT_EVENT_DURATION_MINUTES = 90
+const EVENT_LOCATION_COORDINATES = {
+  'Alexandra Gardens': { latitude: -37.8205, longitude: 144.9729 },
+  'Birrarung Marr': { latitude: -37.8185, longitude: 144.9747 },
+  'Carlton Community Centre': { latitude: -37.7981, longitude: 144.9716 },
+  'Docklands Library': { latitude: -37.8148, longitude: 144.9418 },
+  'Docklands Park': { latitude: -37.8162, longitude: 144.9468 },
+  'Fawkner Park': { latitude: -37.8414, longitude: 144.9832 },
+  'Federation Square': { latitude: -37.8180, longitude: 144.9691 },
+  'Flagstaff Gardens': { latitude: -37.8117, longitude: 144.9545 },
+  'Kensington Community Centre': { latitude: -37.7932, longitude: 144.9255 },
+  'Library at the Dock': { latitude: -37.8148, longitude: 144.9418 },
+  'Melbourne Town Hall': { latitude: -37.8151, longitude: 144.9666 },
+  'Princes Park': { latitude: -37.7814, longitude: 144.9500 },
+  'Queen Victoria Market': { latitude: -37.8076, longitude: 144.9568 },
+  'Southbank Promenade': { latitude: -37.8200, longitude: 144.9640 },
+}
 const requiredTextFields = [
   'title',
   'category',
@@ -63,6 +79,10 @@ function validateEvents(records) {
     ) {
       throw new Error(`Event ${event.id} must have a duration from 30 to 240 minutes.`)
     }
+
+    if (!EVENT_LOCATION_COORDINATES[event.location]) {
+      throw new Error(`Event ${event.id} has no coordinates for ${event.location}.`)
+    }
   }
 }
 
@@ -97,6 +117,7 @@ const batch = db.batch()
 for (const [index, event] of sortedEvents.entries()) {
   batch.set(db.collection('events').doc(String(event.id)), {
     ...event,
+    ...EVENT_LOCATION_COORDINATES[event.location],
     durationMinutes: eventDuration(event),
     sortOrder: index + 1,
   })

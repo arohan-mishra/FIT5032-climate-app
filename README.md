@@ -45,7 +45,9 @@ FIREBASE_PROJECT_ID=your-project-id npm run import:events
 ```
 
 The event import sorts the records by date and time before assigning their
-Firestore `sortOrder` values.
+Firestore `sortOrder` values. It also adds latitude and longitude values for
+the known event venues so the application can plan cycling directions to an
+event.
 
 ## Check the application
 

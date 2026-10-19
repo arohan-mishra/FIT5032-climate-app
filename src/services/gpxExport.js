@@ -7,6 +7,15 @@ function createTrackPoint(coordinate) {
   return `<trkpt lat="${latitude}" lon="${longitude}">${elevationElement}</trkpt>`
 }
 
+function escapeXml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
+}
+
 export function createGpx(route, routeName) {
   const geometry = route?.features?.[0]?.geometry
 
@@ -25,24 +34,47 @@ export function createGpx(route, routeName) {
     throw new Error('This route does not contain valid coordinates.')
   }
 
+  const safeRouteName = escapeXml(routeName)
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Pedal Melbourne" xmlns="http://www.topografix.com/GPX/1/1">
-  <metadata><name>${routeName}</name></metadata>
-  <trk><name>${routeName}</name>${trackSegments}</trk>
+  <metadata><name>${safeRouteName}</name></metadata>
+  <trk><name>${safeRouteName}</name>${trackSegments}</trk>
 </gpx>`
 }
 
-export function downloadRouteAsGpx(route, routeNumber) {
-  const routeName = `Pedal Melbourne Route ${routeNumber}`
+function downloadGpx(route, routeName, filename) {
   const gpx = createGpx(route, routeName)
   const file = new Blob([gpx], { type: 'application/gpx+xml' })
   const downloadUrl = URL.createObjectURL(file)
   const link = document.createElement('a')
 
   link.href = downloadUrl
-  link.download = `pedal-melbourne-route-${routeNumber}.gpx`
+  link.download = filename
   document.body.appendChild(link)
   link.click()
   link.remove()
   URL.revokeObjectURL(downloadUrl)
+}
+
+export function downloadRouteAsGpx(route, routeNumber) {
+  downloadGpx(
+    route,
+    `Pedal Melbourne Route ${routeNumber}`,
+    `pedal-melbourne-route-${routeNumber}.gpx`,
+  )
+}
+
+export function downloadEventRideAsGpx(route, eventTitle) {
+  const safeFilename = String(eventTitle || 'event')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60) || 'event'
+
+  downloadGpx(
+    route,
+    `Ride to ${eventTitle || 'event'}`,
+    `ride-to-${safeFilename}.gpx`,
+  )
 }
